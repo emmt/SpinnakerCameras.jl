@@ -15,7 +15,8 @@ end
 
 import Base:
     VersionNumber,
-    length, size, eltype, show, isvalid, isreadable, iswritable, isequal, parent,
+    length, size, eltype, show, iterate, parent,
+    isvalid, isreadable, iswritable, isequal,
     getindex, setindex!,
     getproperty, setproperty!, propertynames
 

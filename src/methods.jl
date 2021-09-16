@@ -109,11 +109,12 @@ end
 """
     sys = SpinnakerCameras.System()
 
-yields an instance `sys` of Spinnaker object system.  The following shortcuts
+yields an instance `sys` of Spinnaker object system.  The following properties
 are implemented:
 
-    sys[:] # yields the list of interfaces
-    sys[i] # yields the i-th interface
+    sys.cameras        # yields the list of cameras
+    sys.interfaces     # yields the list of interfaces
+    sys.libraryversion # yields the version number of the SDK library
 
 """ System
 
@@ -121,8 +122,19 @@ _finalize(obj::System) = _finalize(obj) do ptr
     @checked_call(:spinSystemReleaseInstance, (Ptr{OpaqueSystem},), ptr)
 end
 
-getindex(sys::System, ::Colon) = InterfaceList(sys)
-getindex(sys::System, i::Integer) = InterfaceList(sys)[i]
+propertynames(::System) = (
+    :cameras,
+    :interfaces,
+    :libraryversion)
+
+getproperty(obj::System, sym::Symbol) = getproperty(obj, Val(sym))
+
+setproperty!(obj::System, sym::Symbol, val) =
+    error("members of Spinnaker ", shortname(obj), " are read-only")
+
+getproperty(sys::System, ::Val{:cameras}) = CameraList(sys)
+getproperty(sys::System, ::Val{:interfaces}) = InterfaceList(sys)
+getproperty(sys::System, ::Val{:libraryversion}) = VersionNumber(sys)
 
 """
     SpinnakerCameras.LibraryVersion(sys)
@@ -149,7 +161,7 @@ VersionNumber(v::LibraryVersion) =
     lst = SpinnakerCameras.InterfaceList(sys)
 
 yields a list of Spinnaker interfaces for the system `sys`.  This is the same
-as `sys[:]`.
+as `sys.interfaces`.
 
 Call `length(lst)` to retrieve the number of interfaces and use syntax `lst[i]`
 to get the `i`-th interface.
@@ -167,6 +179,17 @@ _finalize(obj::InterfaceList) = _finalize(obj) do ptr
     _check(err2, :spinInterfaceListDestroy)
 end
 
+# Make interface lists and camera lists iterable.
+function iterate(itr::Union{InterfaceList,CameraList},
+                 state::NTuple{2,Int} = (1, length(itr)))
+    idx, len = state
+    if idx ≤ len
+        return itr[idx], (idx+1, len)
+    else
+        return nothing
+    end
+end
+
 #------------------------------------------------------------------------------
 # INTERFACES
 
@@ -178,6 +201,15 @@ yields the `i`-th entry of Spinnaker interface list `lst`.  This is the same as
 
 """ Interface
 
+propertynames(::Interface) = (:cameras,)
+
+getproperty(obj::Interface, sym::Symbol) = getproperty(obj, Val(sym))
+
+setproperty!(obj::Interface, sym::Symbol, val) =
+    error("members of Spinnaker ", shortname(obj), " are read-only")
+
+getproperty(obj::Interface, ::Val{:cameras}) = CameraList(obj)
+
 _finalize(obj::Interface) = _finalize(obj) do ptr
     @checked_call(:spinInterfaceRelease, (Ptr{OpaqueInterface},), ptr)
 end
@@ -186,10 +218,11 @@ end
 # LISTS OF CAMERAS
 
 """
-    lst = SpinnakerCameras.CameraList(sys|int)
+    lst = SpinnakerCameras.CameraList(sys)
+    lst = SpinnakerCameras.CameraList(int)
 
-yields a list of Spinnaker cameras for the system `sys` or for the interface
-`int`.
+yield a list of Spinnaker cameras for the system `sys` or for the interface
+`int`.   This is the same as `sys.cameras` and `int.cameras` respectively.
 
 Call `length(lst)` to retrieve the number of cameras and use syntax `lst[i]` to
 get the `i`-th camera.
