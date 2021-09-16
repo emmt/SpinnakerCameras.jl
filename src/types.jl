@@ -194,6 +194,19 @@ mutable struct Node <: SpinObject
 end
 
 mutable struct Image <: SpinObject
+    # The `created` member of images is to distinguish between the two kinds of
+    # images provided by the Spinnaker C SDK:
+    #
+    # - images obtained from a call to `spinCameraGetNextImage` or
+    #   `spinCameraGetNextImageEx` and released by `spinImageRelease`,
+    #
+    # - images created by `spinImageCreateEmpty`, `spinImageCreateEx`,
+    #   `spinImageCreateEx2`, or `spinImageCreate`, and destroyed by
+    #   `spinImageDestroy`.
+    #
     handle::Ptr{OpaqueImage}
-    system::System # needed to maintain a reference to the "system" instance
+    created::Bool
+    Image(handle::Ptr{OpaqueImage}, created::Bool) =
+        finalizer(_finalize, new(handle, created))
+    Image() = Image(Ptr{OpaqueImage}(0), false)
 end

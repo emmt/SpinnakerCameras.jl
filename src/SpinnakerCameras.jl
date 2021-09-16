@@ -15,7 +15,7 @@ end
 
 import Base:
     VersionNumber,
-    length, eltype, show, isvalid, isreadable, iswritable, isequal, parent,
+    length, size, eltype, show, isvalid, isreadable, iswritable, isequal, parent,
     getindex, setindex!,
     getproperty, setproperty!, propertynames
 
@@ -23,5 +23,6 @@ include("macros.jl")
 include("types.jl")
 include("errors.jl")
 include("methods.jl")
+include("images.jl")
 
 end # module

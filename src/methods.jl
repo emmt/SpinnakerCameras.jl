@@ -58,7 +58,8 @@ shortname(::Type{<:System}) = "object system"
 shortname(::Type{<:Interface}) = "interface"
 shortname(::Type{<:InterfaceList}) = "interface list"
 shortname(::Type{<:CameraList}) = "camera list"
-#shortname(::Type{<:Camera}) = "camera"
+shortname(::Type{<:Camera}) = "camera"
+shortname(::Type{<:Image}) = "image"
 
 """
     SpinnakerCameras.check(obj) -> obj
