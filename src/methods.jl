@@ -137,6 +137,10 @@ function LibraryVersion(sys::System)
     return ref[]
 end
 
+VersionNumber(sys::System) = VersionNumber(LibraryVersion(sys))
+VersionNumber(v::LibraryVersion) =
+    VersionNumber(v.major, v.minor, v.type, (), (v.build,))
+
 #------------------------------------------------------------------------------
 # LISTS OF INTERFACES
 
