@@ -12,6 +12,8 @@ for C code.
 
 ## Usage
 
+### System, interface and camera objects
+
 Compared to the Spinnaker SDK for C code, the managment of objects is much
 simplified by the Julia interface.  For instance, Spinnaker objects are
 automatically released or destroyed when their Julia counterpart is rabage
@@ -89,3 +91,71 @@ end
 ```
 
 to loop over the cameras of the system.
+
+
+### Images
+
+A Spinnaker image may be created by:
+
+```julia
+img = SpinnakerCameras.Image(pixelsformat, (width,height))
+```
+
+where `pixelsformat` is an integer specifying the pixel format (see enumeration
+`spinImageFileFormat` in header `SpinnakerDefsC.h` for possible values) while
+the 2-tuple `(width,height)` specifies the dimensions of the image in pixels.
+
+An image may also be acquired from a camera (streaming acquisition must be
+running):
+
+```julia
+img = SpinnakerCameras.next_image(camera)
+```
+
+which waits forever until a new image is available.  In general it is better to
+specify a time limit, for instance:
+
+```julia
+secs = 5.0 # maximum number of seconds to wait
+img = SpinnakerCameras.next_image(camera, secs)
+```
+
+If you want to catch timeout error, the following piece of code yields a result
+`img` that is an image if a new image is acquirred before the time limit, or
+`nothing` if the time limit is exceeded, and throws an exception otherwise:
+
+```julia
+img = try
+    SpinnakerCameras.next_image(camera, secs)
+catch ex
+    if (!isa(ex, SpinnakerCameras.CallError) ||
+        ex.code != SpinnakerCameras.SPINNAKER_ERR_TIMEOUT)
+        rethrow(ex)
+    end
+    nothing
+end
+```
+
+Images implement many properties.  For example:
+
+```julia
+img.bitsperpixel     # yields the number of bits per pixel of `img`
+img.buffersize       # yields the buffer size of `img`
+img.data             # yields the image data of `img`
+img.privatedata      # yields the private data of `img`
+img.frameid          # yields the frame Id of `img`
+img.height           # yields the height of `img`
+img.id               # yields the Id of `img`
+img.offsetx          # yields the X-offset of `img`
+img.offsety          # yields the Y-offset of `img`
+img.paddingx         # yields the X-padding of `img`
+img.paddingy         # yields the Y-padding of `img`
+img.payloadtype      # yields the payload type of `img`
+img.pixelformat      # yields the pixel format of `img`
+img.pixelformatname  # yields the pixel format name of `img`
+img.size             # yields the size of `img` (number of bytes)
+img.stride           # yields the stride of `img`
+img.timestamp        # yields the timestamp of `img`
+img.validpayloadsize # yields the valid payload size of `img`
+img.width            # yields the width of `img`
+```
