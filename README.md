@@ -83,7 +83,7 @@ but which are only used once.
 Lists of interfaces and lists of cameras are iterable so you may write:
 
 ```julia
-for camera in = system.cameras
+for camera in system.cameras
     ...
 end
 ```
