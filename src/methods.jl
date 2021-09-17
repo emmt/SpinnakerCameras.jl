@@ -552,7 +552,7 @@ for (sym, func, T, def) in (
     (:tooltip,     :spinNodeGetToolTip,     Cstring,     ""),
     (:displayname, :spinNodeGetDisplayName, Cstring,     ""),
     (:type,        :spinNodeGetType,        NodeType,    UnknownNode),
-    (:pollingtime, :spinNodeGetPollingTime, Int64,       0))
+    (:pollingtime, :spinNodeGetPollingTime, Int64,       -1))
     if T === Cstring
         @eval function getproperty(obj::Node, ::$(Val{sym}))
             isnull(handle(obj)) && return $def
