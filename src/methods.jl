@@ -159,6 +159,11 @@ to get the `i`-th interface.
 
 getindex(lst::InterfaceList, i::Integer) = Interface(lst, i)
 
+empty!(obj::InterfaceList) = begin
+    @checked_call(:spinInterfaceListClear, (InterfaceListHandle,), handle(obj))
+    return obj
+end
+
 _finalize(obj::InterfaceList) = _finalize(obj) do ptr
     err1 = @unchecked_call(:spinInterfaceListClear,
                            (InterfaceListHandle,), ptr)
@@ -220,6 +225,11 @@ get the `i`-th camera.
 
 getindex(lst::CameraList, i::Integer) = Camera(lst, i)
 
+empty!(obj::CameraList) = begin
+    @checked_call(:spinCameraListClear, (CameraListHandle,), handle(obj))
+    return obj
+end
+
 _finalize(obj::CameraList) = _finalize(obj) do ptr
     err1 = @unchecked_call(:spinCameraListClear,
                            (CameraListHandle,), ptr)
@@ -228,7 +238,6 @@ _finalize(obj::CameraList) = _finalize(obj) do ptr
     _check(err1, :spinCameraListClear)
     _check(err2, :spinCameraListDestroy)
 end
-
 
 #------------------------------------------------------------------------------
 # CAMERAS
@@ -311,8 +320,7 @@ for (jl_func, c_func) in ((:isinitialized, :spinCameraIsInitialized),
         function $_jl_func(ptr::CameraHandle)
             isnull(ptr) && return false
             ref = Ref{SpinBool}()
-            @checked_call($c_func,
-                          (CameraHandle, Ptr{SpinBool}), ptr, ref)
+            @checked_call($c_func, (CameraHandle, Ptr{SpinBool}), ptr, ref)
             return to_bool(ref[])
         end
     end

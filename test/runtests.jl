@@ -56,10 +56,12 @@ end
     @test isa(sys.libraryversion, VersionNumber)
     @test isa(sys.interfaces, SpinnakerCameras.InterfaceList)
     @test length(sys.interfaces) ≥ 0
+    @test length(empty!(sys.interfaces)) == 0
     @test all(x -> isa(x, SpinnakerCameras.Interface), sys.interfaces)
     @test all(x -> isa(x.cameras, SpinnakerCameras.CameraList), sys.interfaces)
     @test isa(sys.cameras, SpinnakerCameras.CameraList)
     @test length(sys.cameras) ≥ 0
+    @test length(empty!(sys.cameras)) == 0
     @test all(x -> isa(x, SpinnakerCameras.Camera), sys.cameras)
 end
 
