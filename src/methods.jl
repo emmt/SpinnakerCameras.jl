@@ -17,10 +17,7 @@ to_bool(x::SpinBool) = (x != zero(x))
 yields whether `ptr` is a null pointer.
 
 """
-isnull(ptr::Ptr{T}) where {T} = (ptr == null_pointer(T))
-
-null_pointer(::Type{T}) where {T} = Ptr{T}(0)
-null_pointer(x) = null_pointer(typeof(x))
+isnull(ptr::Ptr) = (UInt(ptr) == 0)
 
 """
     SpinnakerCameras.handle(obj) -> ptr
@@ -63,7 +60,8 @@ the object.
 
 """
 function check(obj::SpinObject)
-    isnull(obj) && error("Spinnaker ", shortname(obj), " has been finalized")
+    isnull(handle(obj)) && error(
+        "Spinnaker ", shortname(obj), " has been finalized")
     return obj
 end
 
@@ -77,7 +75,7 @@ for (jl_func, type, c_func) in (
     handle_type = Symbol(type,"Handle")
     @eval begin
         function $jl_func(obj::$type)
-            isnull(obj) && return 0
+            isnull(handle(obj)) && return 0
             ref = Ref{Csize_t}(0)
             @checked_call($c_func, ($handle_type, Ptr{Csize_t}),
                           handle(obj), ref)
@@ -468,7 +466,7 @@ end
 
 isequal(a::Node, b::Node) = _isequal(ghandle(a), handle(b))
 function _isequal(a::NodeHandle, b::NodeHandle)
-    (isnull(a) || isnull(b)) && return false
+    (isnull(handle(a)) || isnull(handle(b))) && return false
     ref = Ref{SpinBool}(false)
     @checked_call(:spinNodeIsEqual,
                   (NodeHandle, NodeHandle, Ptr{SpinBool}), a, b, ref)
