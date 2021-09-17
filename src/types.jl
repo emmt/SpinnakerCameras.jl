@@ -37,35 +37,35 @@ abstract type SpinObject end
 # level Julia interface, we use more specific pointers to avoid errors.
 # `Ptr{<:OpaqueObject}` is the super-type of all pointers to Spinnaker objects.
 abstract type OpaqueObject end
-abstract type OpaqueSystem        <: OpaqueObject end
-abstract type OpaqueCamera        <: OpaqueObject end
-abstract type OpaqueCameraList    <: OpaqueObject end
-abstract type OpaqueInterface     <: OpaqueObject end
-abstract type OpaqueInterfaceList <: OpaqueObject end
-abstract type OpaqueNode          <: OpaqueObject end
-abstract type OpaqueNodeMap       <: OpaqueObject end
-abstract type OpaqueImage         <: OpaqueObject end
+
+for T in (:System, :Camera, :CameraList, :Interface, :InterfaceList,
+          :Node, :NodeMap, :Image)
+    @eval begin
+        abstract type $(Symbol("Opaque",T)) <: OpaqueObject; end
+        const $(Symbol(T,"Handle")) = Ptr{$(Symbol("Opaque",T))}
+    end
+end
 
 mutable struct System <: SpinObject
-    handle::Ptr{OpaqueSystem}
+    handle::SystemHandle
     function System()
-        ref = Ref{Ptr{OpaqueSystem}}()
-        @checked_call(:spinSystemGetInstance, (Ptr{Ptr{OpaqueSystem}},), ref)
+        ref = Ref{SystemHandle}()
+        @checked_call(:spinSystemGetInstance, (Ptr{SystemHandle},), ref)
         return finalizer(_finalize, new(ref[]))
     end
 end
 
 mutable struct InterfaceList <: SpinObject
-    handle::Ptr{OpaqueInterfaceList}
+    handle::InterfaceListHandle
     system::System # needed to maintain a reference to the "system" instance
     function InterfaceList(sys::System)
         # Check argument.
         check(sys)
 
         # Create an empty interface list.
-        ref = Ref{Ptr{OpaqueInterfaceList}}()
+        ref = Ref{InterfaceListHandle}()
         @checked_call(:spinInterfaceListCreateEmpty,
-                      (Ptr{Ptr{OpaqueInterfaceList}},), ref)
+                      (Ptr{InterfaceListHandle},), ref)
 
         # Instanciate the object and associate its finalizer (in case of
         # subsequent errors).
@@ -73,7 +73,7 @@ mutable struct InterfaceList <: SpinObject
 
         # Retrieve the interface list from the system.
         @checked_call(:spinSystemGetInterfaces,
-                      (Ptr{OpaqueSystem}, Ptr{OpaqueInterfaceList}),
+                      (SystemHandle, InterfaceListHandle),
                       handle(sys), handle(lst))
 
         # Return the instanciated object.
@@ -82,23 +82,23 @@ mutable struct InterfaceList <: SpinObject
 end
 
 mutable struct Interface <: SpinObject
-    handle::Ptr{OpaqueInterface}
+    handle::InterfaceHandle
     system::System # needed to maintain a reference to the "system" instance
     function Interface(lst::InterfaceList, i::Integer)
         1 ≤ i ≤ length(lst) || error(
             "out of bound index in Spinnaker ", shortname(lst))
         sys = check(system(check(lst)))
-        ref = Ref{Ptr{OpaqueInterface}}()
+        ref = Ref{InterfaceHandle}()
         @checked_call(:spinInterfaceListGet,
-                      (Ptr{OpaqueInterfaceList}, Csize_t,
-                       Ptr{Ptr{OpaqueInterface}}),
+                      (InterfaceListHandle, Csize_t,
+                       Ptr{InterfaceHandle}),
                       handle(lst), i - 1, ref)
         return finalizer(_finalize, new(ref[], sys))
     end
 end
 
 mutable struct CameraList <: SpinObject
-    handle::Ptr{OpaqueCameraList}
+    handle::CameraListHandle
     system::System # needed to maintain a reference to the "system" instance
 
     function CameraList(sys::System)
@@ -106,9 +106,9 @@ mutable struct CameraList <: SpinObject
         check(sys)
 
         # Create an empty camera list.
-        ref = Ref{Ptr{OpaqueCameraList}}()
+        ref = Ref{CameraListHandle}()
         @checked_call(:spinCameraListCreateEmpty,
-                      (Ptr{Ptr{OpaqueCameraList}},), ref)
+                      (Ptr{CameraListHandle},), ref)
 
         # Instanciate the object and associate its finalizer (in case of
         # subsequent errors).
@@ -116,7 +116,7 @@ mutable struct CameraList <: SpinObject
 
         # Retrieve the camera list from the system.
         @checked_call(:spinSystemGetCameras,
-                      (Ptr{OpaqueSystem}, Ptr{OpaqueCameraList}),
+                      (SystemHandle, CameraListHandle),
                       handle(sys), handle(lst))
 
         # Return the instanciated object.
@@ -128,9 +128,9 @@ mutable struct CameraList <: SpinObject
         sys = check(system(check(int)))
 
         # Create an empty camera list.
-        ref = Ref{Ptr{OpaqueCameraList}}()
+        ref = Ref{CameraListHandle}()
         @checked_call(:spinCameraListCreateEmpty,
-                      (Ptr{Ptr{OpaqueCameraList}},), ref)
+                      (Ptr{CameraListHandle},), ref)
 
         # Instanciate the object and associate its finalizer (in case of
         # subsequent errors).
@@ -138,7 +138,7 @@ mutable struct CameraList <: SpinObject
 
         # Retrieve the camera list for the interface.
         @checked_call(:spinInterfaceGetCameras,
-                      (Ptr{OpaqueInterface}, Ptr{OpaqueCameraList}),
+                      (InterfaceHandle, CameraListHandle),
                       handle(int), handle(lst))
 
         # Return the instanciated object.
@@ -147,15 +147,15 @@ mutable struct CameraList <: SpinObject
 end
 
 mutable struct Camera <: SpinObject
-    handle::Ptr{OpaqueCamera}
+    handle::CameraHandle
     system::System # needed to maintain a reference to the "system" instance
     function Camera(lst::CameraList, i::Integer)
         1 ≤ i ≤ length(lst) || error(
             "out of bound index in Spinnaker ", shortname(lst))
         sys = check(system(check(lst)))
-        ref = Ref{Ptr{OpaqueCamera}}()
+        ref = Ref{CameraHandle}()
         @checked_call(:spinCameraListGet,
-                      (Ptr{OpaqueCameraList}, Csize_t, Ptr{Ptr{OpaqueCamera}}),
+                      (CameraListHandle, Csize_t, Ptr{CameraHandle}),
                       handle(lst), i - 1, ref)
         return finalizer(_finalize, new(ref[], sys))
     end
@@ -164,19 +164,19 @@ end
 # FIXME: not yet interfaced
 
 mutable struct NodeMap <: SpinObject
-    handle::Ptr{OpaqueNodeMap}
+    handle::NodeMapHandle
     system::System # needed to maintain a reference to the "system" instance
 end
 
 mutable struct Node <: SpinObject
-    handle::Ptr{OpaqueNode}
+    handle::NodeHandle
     system::System # needed to maintain a reference to the "system" instance
     parent::NodeMap # needed to maintain a reference to the parent node map instance
     function Node(lst::NodeMap, str::AbstractString)
         sys = check(system(check(lst)))
-        ref = Ref{Ptr{OpaqueNode}}()
+        ref = Ref{NodeHandle}()
         @checked_call(:spinNodeMapGetNode,
-                      (Ptr{OpaqueNodeMap}, Cstring, Ptr{Ptr{OpaqueNode}}),
+                      (NodeMapHandle, Cstring, Ptr{NodeHandle}),
                       lst, str, ref)
         return finalizer(_finalize, new(ref[], sys, lst))
     end
@@ -184,9 +184,9 @@ mutable struct Node <: SpinObject
         sys = check(system(check(lst)))
         1 ≤ i ≤ length(lst) || error(
             "out of bound index in Spinnaker ", shortname(lst))
-        ref = Ref{Ptr{OpaqueNode}}()
+        ref = Ref{NodeHandle}()
         @checked_call(:spinNodeMapGetNodeByIndex,
-                      (Ptr{OpaqueNodeMap}, Csize_t, Ptr{Ptr{OpaqueNode}}),
+                      (NodeMapHandle, Csize_t, Ptr{NodeHandle}),
                       lst, i - 1, ref)
         _check(err, :spinNodeMapGetNodeByIndex)
         return finalizer(_finalize, new(ref[], sys, lst))
@@ -204,9 +204,9 @@ mutable struct Image <: SpinObject
     #   `spinImageCreateEx2`, or `spinImageCreate`, and destroyed by
     #   `spinImageDestroy`.
     #
-    handle::Ptr{OpaqueImage}
+    handle::ImageHandle
     created::Bool
-    Image(handle::Ptr{OpaqueImage}, created::Bool) =
+    Image(handle::ImageHandle, created::Bool) =
         finalizer(_finalize, new(handle, created))
-    Image() = Image(Ptr{OpaqueImage}(0), false)
+    Image() = Image(ImageHandle(0), false)
 end

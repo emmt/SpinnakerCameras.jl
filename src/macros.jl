@@ -14,7 +14,7 @@ calls function `func` in the Spinnaker C SDK with arguments `args...` of types
 as a string or as a symbol.  Example:
 
     @unchecked_call(:spinSystemGetLibraryVersion,
-                    (Ptr{OpaqueSystem}, Ptr{LibraryVersion},),
+                    (SystemHandle, Ptr{LibraryVersion},),
                     handle(system), ref)
 
 is equivalent to (`lib` is the constant string the path to the Spinnaker
@@ -22,13 +22,13 @@ dynamic library and `Cint` is the type of the result returned by all functions
 of the Spinnaker C SDK):
 
     err = ccall((:spinSystemGetLibraryVersion, lib), Cint,
-                (Ptr{OpaqueSystem}, Ptr{LibraryVersion},),
+                (SystemHandle, Ptr{LibraryVersion},),
                 handle(system), ref)
 
 or
 
    err = @ccall lib.spinSystemGetLibraryVersion(
-       handle(system)::Ptr{OpaqueSystem},
+       handle(system)::SystemHandle,
        ref::Ptr{LibraryVersion}
    )::Cint
 
@@ -46,7 +46,7 @@ indicates an error.  The function to call may be specified as a string or as a
 symbol.  Example:
 
     @checked_call(:spinSystemGetLibraryVersion,
-                  (Ptr{OpaqueSystem}, Ptr{LibraryVersion},),
+                  (SystemHandle, Ptr{LibraryVersion},),
                   handle(system), ref)
 
 is equivalent to (`lib` is the constant string the path to the Spinnaker
@@ -54,7 +54,7 @@ dynamic library and `Cint` is the type of the result returned by all functions
 of the Spinnaker C SDK):
 
     let err = ccall((:spinSystemGetLibraryVersion, lib), Cint,
-                    (Ptr{OpaqueSystem}, Ptr{LibraryVersion},),
+                    (SystemHandle, Ptr{LibraryVersion},),
                     handle(system), ref)
         _check(err, :spinSystemGetLibraryVersion)
     end

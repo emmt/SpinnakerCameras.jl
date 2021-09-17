@@ -20,17 +20,6 @@ isnull(ptr::Ptr{T}) where {T} = (ptr == null_pointer(T))
 null_pointer(::Type{T}) where {T} = Ptr{T}(0)
 null_pointer(x) = null_pointer(typeof(x))
 
-_handle_type(obj::SpinObject) = _handle_type(typeof(obj))
-_handle_type(::Type{<:SpinObject})    = OpaqueObject
-_handle_type(::Type{<:System})        = OpaqueSystem
-_handle_type(::Type{<:Camera})        = OpaqueCamera
-_handle_type(::Type{<:CameraList})    = OpaqueCameraList
-_handle_type(::Type{<:Interface})     = OpaqueInterface
-_handle_type(::Type{<:InterfaceList}) = OpaqueInterfaceList
-_handle_type(::Type{<:Node})          = OpaqueNode
-_handle_type(::Type{<:NodeMap})       = OpaqueNodeMap
-_handle_type(::Type{<:Image})         = OpaqueImage
-
 """
     SpinnakerCameras.handle(obj) -> ptr
 
@@ -41,7 +30,7 @@ low-level interface, it shall not be used by the end-user.
 handle(obj::SpinObject) = getfield(obj, :handle)
 
 _clear_handle!(obj::SpinObject) =
-    setfield!(obj, :handle, Ptr{_handle_type(obj)}(0))
+    setfield!(obj, :handle, fieldtype(typeof(obj), :handle)(0))
 
 system(sys::System) = obj
 system(obj::SpinObject) = getfield(obj, :system)
@@ -91,12 +80,12 @@ for (jl_func, type, c_func) in (
     #(:sizeof, :Image,         :spinImageGetSize),
     (:length, :CameraList,    :spinCameraListGetSize),
     (:length, :NodeMap,       :spinNodeMapGetNumNodes),)
-    opaque_type = Symbol("Opaque", type)
+    handle_type = Symbol(type,"Handle")
     @eval begin
         function $jl_func(obj::$type)
             isnull(obj) && return 0
             ref = Ref{Csize_t}()
-            @checked_call($c_func, (Ptr{$opaque_type}, Ptr{Csize_t}),
+            @checked_call($c_func, ($handle_type, Ptr{Csize_t}),
                           handle(obj), ref)
             return Int(ref[])
         end
@@ -119,7 +108,7 @@ are implemented:
 """ System
 
 _finalize(obj::System) = _finalize(obj) do ptr
-    @checked_call(:spinSystemReleaseInstance, (Ptr{OpaqueSystem},), ptr)
+    @checked_call(:spinSystemReleaseInstance, (SystemHandle,), ptr)
 end
 
 propertynames(::System) = (
@@ -145,7 +134,7 @@ yields the version of the Spinnaker library for object system `sys`.
 function LibraryVersion(sys::System)
     ref = Ref{LibraryVersion}()
     @checked_call(:spinSystemGetLibraryVersion,
-                  (Ptr{OpaqueSystem}, Ptr{LibraryVersion},),
+                  (SystemHandle, Ptr{LibraryVersion},),
                   handle(sys), ref)
     return ref[]
 end
@@ -172,9 +161,9 @@ getindex(lst::InterfaceList, i::Integer) = Interface(lst, i)
 
 _finalize(obj::InterfaceList) = _finalize(obj) do ptr
     err1 = @unchecked_call(:spinInterfaceListClear,
-                           (Ptr{OpaqueInterfaceList},), ptr)
+                           (InterfaceListHandle,), ptr)
     err2 = @unchecked_call(:spinInterfaceListDestroy,
-                           (Ptr{OpaqueInterfaceList},), ptr)
+                           (InterfaceListHandle,), ptr)
     _check(err1, :spinInterfaceListClear)
     _check(err2, :spinInterfaceListDestroy)
 end
@@ -211,7 +200,7 @@ setproperty!(obj::Interface, sym::Symbol, val) =
 getproperty(obj::Interface, ::Val{:cameras}) = CameraList(obj)
 
 _finalize(obj::Interface) = _finalize(obj) do ptr
-    @checked_call(:spinInterfaceRelease, (Ptr{OpaqueInterface},), ptr)
+    @checked_call(:spinInterfaceRelease, (InterfaceHandle,), ptr)
 end
 
 #------------------------------------------------------------------------------
@@ -233,9 +222,9 @@ getindex(lst::CameraList, i::Integer) = Camera(lst, i)
 
 _finalize(obj::CameraList) = _finalize(obj) do ptr
     err1 = @unchecked_call(:spinCameraListClear,
-                           (Ptr{OpaqueCameraList},), ptr)
+                           (CameraListHandle,), ptr)
     err2 = @unchecked_call(:spinCameraListDestroy,
-                           (Ptr{OpaqueCameraList},), ptr)
+                           (CameraListHandle,), ptr)
     _check(err1, :spinCameraListClear)
     _check(err2, :spinCameraListDestroy)
 end
@@ -287,8 +276,8 @@ for (jl_func, c_func) in ((:initialize,   :spinCameraInit),
     _jl_func = Symbol("_", jl_func)
     @eval begin
         $jl_func(obj::Camera) = $_jl_func(handle(obj))
-        $_jl_func(ptr::Ptr{OpaqueCamera}) =
-            @checked_call($c_func, (Ptr{OpaqueCamera},), ptr)
+        $_jl_func(ptr::CameraHandle) =
+            @checked_call($c_func, (CameraHandle,), ptr)
     end
 end
 
@@ -319,11 +308,11 @@ for (jl_func, c_func) in ((:isinitialized, :spinCameraIsInitialized),
     _jl_func = Symbol("_", jl_func)
     @eval begin
         $jl_func(obj::Camera) = $_jl_func(handle(obj))
-        function $_jl_func(ptr::Ptr{OpaqueCamera})
+        function $_jl_func(ptr::CameraHandle)
             isnull(ptr) && return false
             ref = Ref{SpinBool}()
             @checked_call($c_func,
-                          (Ptr{OpaqueCamera}, Ptr{SpinBool}), ptr, ref)
+                          (CameraHandle, Ptr{SpinBool}), ptr, ref)
             return to_bool(ref[])
         end
     end
@@ -336,7 +325,7 @@ function _finalize(obj::Camera)
     end
     if !isnull(ptr)
         _clear_handle!(cam)
-        @checked_call(:spinCameraRelease, (Ptr{OpaqueCamera},), ptr)
+        @checked_call(:spinCameraRelease, (CameraHandle,), ptr)
     end
     return nothing
 end
@@ -393,14 +382,14 @@ for (jl_func, type, c_func) in (
     (:getmax,   Cdouble, :spinFloatGetMAx),)
     @eval function $jl_func(::Type{$type}, node::Node)
         ref = Ref{$type}()
-        @checked_call($c_func, (Ptr{OpaqueNode}, Ptr{$type}), handle(node), ref)
+        @checked_call($c_func, (NodeHandle, Ptr{$type}), handle(node), ref)
         return ref[]
     end
     if jl_func === :getvalue
         c_func_ex = Symbol(c_func, "Ex")
         @eval function $jl_func(::Type{$type}, node::Node, verif::Bool)
             ref = Ref{$type}()
-            @checked_call($c_func_ex, (Ptr{OpaqueNode}, SpinBool, Ptr{$type}),
+            @checked_call($c_func_ex, (NodeHandle, SpinBool, Ptr{$type}),
                           handle(node), verif, ref)
             return ref[]
         end
@@ -456,10 +445,10 @@ for (jl_func, c_func) in ((:isavailable,   :spinNodeIsAvailable),
     _jl_func = Symbol("_", jl_func)
     @eval begin
         $jl_func(obj::Node) = $_jl_func(handle(obj))
-        function $_jl_func(ptr::Ptr{OpaqueNode})
+        function $_jl_func(ptr::NodeHandle)
             isnull(ptr) && return false
             ref = Ref{SpinBool}()
-            @checked_call($c_func, (Ptr{OpaqueNode}, Ptr{SpinBool}),
+            @checked_call($c_func, (NodeHandle, Ptr{SpinBool}),
                           handle(node), ref)
             return to_bool(ref[])
         end
@@ -467,11 +456,11 @@ for (jl_func, c_func) in ((:isavailable,   :spinNodeIsAvailable),
 end
 
 isequal(a::Node, b::Node) = _isequal(ghandle(a), handle(b))
-function _isequal(a::Ptr{OpaqueNode}, b::Ptr{OpaqueNode})
+function _isequal(a::NodeHandle, b::NodeHandle)
     (isnull(a) || isnull(b)) && return false
     ref = Ref{SpinBool}()
     @checked_call(:spinNodeIsEqual,
-                  (Ptr{OpaqueNode}, Ptr{OpaqueNode}, Ptr{SpinBool}), a, b, ref)
+                  (NodeHandle, NodeHandle, Ptr{SpinBool}), a, b, ref)
     return to_bool(ref[])
 end
 
@@ -482,7 +471,7 @@ function _finalize(obj::Node)
     if !isnull(ptr)
         _clear_handle!(obj)
         @checked_call(:spinNodeMapReleaseNode,
-                      (Ptr{OpaqueNodeMap}, Ptr{OpaqueNode}),
+                      (NodeMapHandle, NodeHandle),
                       check(parent(node)), # FIXME:
                       ptr)
     end

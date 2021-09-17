@@ -14,9 +14,9 @@ function _finalize(obj::Image)
         _clear_handle!(obj)
         if getfield(obj, :created)
             setfield!(obj, :created, false)
-            @checked_call(:spinImageDestroy, (Ptr{OpaqueImage},), ptr)
+            @checked_call(:spinImageDestroy, (ImageHandle,), ptr)
         else
-            @checked_call(:spinImageRelease, (Ptr{OpaqueImage},), ptr)
+            @checked_call(:spinImageRelease, (ImageHandle,), ptr)
         end
     end
     return nothing
@@ -31,18 +31,18 @@ See [`SpinnakerCameras.Image`](@ref) for properties of images.
 
 """
 function next_image(camera::Camera)
-    ref = Ref{Ptr{OpaqueImage}}()
+    ref = Ref{ImageHandle}()
     @checked_call(:spinCameraGetNextImage,
-                  (Ptr{OpaqueCamera}, Ptr{Ptr{OpaqueImage}}),
+                  (CameraHandle, Ptr{ImageHandle}),
                   handle(camera), ref)
     return Image(ref[], false)
 end
 
 function next_image(camera::Camera, seconds::Real)
-    ref = Ref{Ptr{OpaqueImage}}()
+    ref = Ref{ImageHandle}()
     milliseconds = round(Int64, seconds*1_000)
     @checked_call(:spinCameraGetNextImageEx,
-                  (Ptr{OpaqueCamera}, Int64, Ptr{Ptr{OpaqueImage}}),
+                  (CameraHandle, Int64, Ptr{ImageHandle}),
                   handle(camera), milliseconds, ref)
     return Image(ref[], false)
 end
@@ -94,10 +94,10 @@ function Image(pixelformat::Integer,
     height  ≥ 1 || throw(ArgumentError("invalid image height"))
     offsetx ≥ 0 || throw(ArgumentError("invalid image X-offset"))
     offsety ≥ 0 || throw(ArgumentError("invalid image Y-offset"))
-    ref = Ref{Ptr{OpaqueImage}}()
+    ref = Ref{ImageHandle}()
     @checked_call(
         :spinImageCreateEx,
-        (Ptr{Ptr{OpaqueImage}}, Csize_t, Csize_t, Csize_t, Csize_t, Cenum, Ptr{Cvoid}),
+        (Ptr{ImageHandle}, Csize_t, Csize_t, Csize_t, Csize_t, Cenum, Ptr{Cvoid}),
         ref, width, height, offsetx, offsety, pixelformat, C_NULL)
     return Image(ref[], true)
 end
@@ -156,7 +156,7 @@ for (sym, func, type) in (
 
     @eval function getproperty(img::Image, ::$(Val{sym}))
         ref = Ref{$type}()
-        @checked_call($func, (Ptr{OpaqueImage}, Ptr{$type}), handle(img), ref)
+        @checked_call($func, (ImageHandle, Ptr{$type}), handle(img), ref)
         return ref[]
     end
 end
@@ -168,7 +168,7 @@ function getproperty(img::Image, ::Val{:pixelformatname})
     while true
         siz[] = length(buf)
         err = @unchecked_call(:spinImageGetPixelFormatName,
-                              (Ptr{OpaqueImage}, Ptr{UInt8}, Ptr{Csize_t}),
+                              (ImageHandle, Ptr{UInt8}, Ptr{Csize_t}),
                               handle(img), buf, siz)
         if err == SPINNAKER_ERR_SUCCESS
             return String(resize!(buf, siz[] - 1))
