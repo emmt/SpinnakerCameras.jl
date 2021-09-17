@@ -8,20 +8,6 @@
 const PixelFormat_Mono8 = Cenum(0)
 const PixelFormat_Mono16 = Cenum(1)
 
-function _finalize(obj::Image)
-    ptr = handle(obj)
-    if !isnull(ptr)
-        _clear_handle!(obj)
-        if getfield(obj, :created)
-            setfield!(obj, :created, false)
-            @checked_call(:spinImageDestroy, (ImageHandle,), ptr)
-        else
-            @checked_call(:spinImageRelease, (ImageHandle,), ptr)
-        end
-    end
-    return nothing
-end
-
 """
    SpinnakerCameras.next_image(cam[, secs=Inf]) -> img
 

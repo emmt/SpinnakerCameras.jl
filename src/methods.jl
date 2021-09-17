@@ -33,9 +33,6 @@ low-level interface, it shall not be used by the end-user.
 """
 handle(obj::SpinObject) = getfield(obj, :handle)
 
-_clear_handle!(obj::SpinObject) =
-    setfield!(obj, :handle, fieldtype(typeof(obj), :handle)(0))
-
 system(sys::System) = obj
 system(obj::SpinObject) = getfield(obj, :system)
 
@@ -66,18 +63,6 @@ the object.
 function check(obj::SpinObject)
     isnull(obj) && error("Spinnaker ", shortname(obj), " has been finalized")
     return obj
-end
-
-# This version of `_finalize` implements the do-block syntax.  If the handle of
-# object `obj` is not null, function `func` is called with the handle value and
-# the object handle is set to null.
-function _finalize(func::Function, obj::SpinObject)
-    ptr = handle(obj)
-    if ! isnull(ptr)
-        _clear_handle!(obj)
-        func(ptr)
-    end
-    return nothing
 end
 
 # Get length/size of some Spinnaker objects.
@@ -141,10 +126,6 @@ are implemented:
 
 """ System
 
-_finalize(obj::System) = _finalize(obj) do ptr
-    @checked_call(:spinSystemReleaseInstance, (SystemHandle,), ptr)
-end
-
 propertynames(::System) = (
     :cameras,
     :interfaces,
@@ -194,15 +175,6 @@ empty!(obj::InterfaceList) = begin
     return obj
 end
 
-_finalize(obj::InterfaceList) = _finalize(obj) do ptr
-    err1 = @unchecked_call(:spinInterfaceListClear,
-                           (InterfaceListHandle,), ptr)
-    err2 = @unchecked_call(:spinInterfaceListDestroy,
-                           (InterfaceListHandle,), ptr)
-    _check(err1, :spinInterfaceListClear)
-    _check(err2, :spinInterfaceListDestroy)
-end
-
 # Make interface lists and camera lists iterable.
 function iterate(itr::Union{InterfaceList,CameraList,NodeMap},
                  state::NTuple{2,Int} = (1, length(itr)))
@@ -234,10 +206,6 @@ propertynames(::Interface) = (:cameras, :tlnodemap)
 
 getproperty(obj::Interface, ::Val{:cameras}) = CameraList(obj)
 
-_finalize(obj::Interface) = _finalize(obj) do ptr
-    @checked_call(:spinInterfaceRelease, (InterfaceHandle,), ptr)
-end
-
 #------------------------------------------------------------------------------
 # LISTS OF CAMERAS
 
@@ -258,15 +226,6 @@ getindex(lst::CameraList, i::Integer) = Camera(lst, i)
 empty!(obj::CameraList) = begin
     @checked_call(:spinCameraListClear, (CameraListHandle,), handle(obj))
     return obj
-end
-
-_finalize(obj::CameraList) = _finalize(obj) do ptr
-    err1 = @unchecked_call(:spinCameraListClear,
-                           (CameraListHandle,), ptr)
-    err2 = @unchecked_call(:spinCameraListDestroy,
-                           (CameraListHandle,), ptr)
-    _check(err1, :spinCameraListClear)
-    _check(err2, :spinCameraListDestroy)
 end
 
 #------------------------------------------------------------------------------
@@ -356,18 +315,6 @@ for (jl_func, c_func) in ((:isinitialized, :spinCameraIsInitialized),
             return to_bool(ref[])
         end
     end
-end
-
-function _finalize(obj::Camera)
-    ptr = handle(obj)
-    if _isinitialized(ptr)
-        _deinitialize(ptr)
-    end
-    if !isnull(ptr)
-        _clear_handle!(cam)
-        @checked_call(:spinCameraRelease, (CameraHandle,), ptr)
-    end
-    return nothing
 end
 
 #------------------------------------------------------------------------------
@@ -580,15 +527,4 @@ for (sym, func, T, def) in (
             return ref[]
         end
     end
-end
-
-function _finalize(obj::Node)
-    ptr = handle(obj)
-    if !isnull(ptr)
-        _clear_handle!(obj)
-        @checked_call(:spinNodeMapReleaseNode,
-                      (NodeMapHandle, NodeHandle),
-                      handle(parent(obj)), ptr)
-    end
-    return nothing
 end

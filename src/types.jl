@@ -29,8 +29,9 @@ struct LibraryVersion
     build::Cuint # Build number of the library
 end
 
-# `SpinObject` is the abstract super-type of Julia objects.  Such objects have
-# a "handle" member which is the address of an opaque Spinnaker object.
+# `SpinObject` is the abstract super-type of Julia objects defined in this
+# package.  Such objects have a "handle" member which is the address of an
+# opaque Spinnaker object.
 abstract type SpinObject end
 
 # In the SDK, all handle types are anonymous pointers (`void*`), but in the low
@@ -46,6 +47,25 @@ for T in (:System, :Camera, :CameraList, :Interface, :InterfaceList,
     end
 end
 
+# For clarity, the finalizers of objects defined by this package are all named
+# `_finalize` and are implemented right after the definition of the object
+# structure.
+#
+# This following of `_finalize` implements the do-block syntax.  If the handle
+# of object `obj` is not null, function `func` is called with the handle value
+# and the object handle is set to null.
+function _finalize(func::Function, obj::SpinObject)
+    ptr = _take_handle!(obj)
+    isnull(ptr) || func(ptr)
+    return nothing
+end
+
+@inline function _take_handle!(obj::T) where {T<:SpinObject}
+    ptr = getfield(obj, :handle)
+    setfield!(obj, :handle, fieldtype(T, :handle)(0))
+    return ptr
+end
+
 mutable struct System <: SpinObject
     handle::SystemHandle
     function System()
@@ -53,6 +73,10 @@ mutable struct System <: SpinObject
         @checked_call(:spinSystemGetInstance, (Ptr{SystemHandle},), ref)
         return finalizer(_finalize, new(ref[]))
     end
+end
+
+_finalize(obj::System) = _finalize(obj) do ptr
+    @checked_call(:spinSystemReleaseInstance, (SystemHandle,), ptr)
 end
 
 mutable struct InterfaceList <: SpinObject
@@ -81,6 +105,12 @@ mutable struct InterfaceList <: SpinObject
     end
 end
 
+_finalize(obj::InterfaceList) = _finalize(obj) do ptr
+    err = @unchecked_call(:spinInterfaceListClear, (InterfaceListHandle,), ptr)
+    @checked_call(:spinInterfaceListDestroy, (InterfaceListHandle,), ptr)
+    _check(err, :spinInterfaceListClear)
+end
+
 mutable struct Interface <: SpinObject
     handle::InterfaceHandle
     system::System # needed to maintain a reference to the "system" instance
@@ -95,6 +125,10 @@ mutable struct Interface <: SpinObject
                       handle(lst), i - 1, ref)
         return finalizer(_finalize, new(ref[], sys))
     end
+end
+
+_finalize(obj::Interface) = _finalize(obj) do ptr
+    @checked_call(:spinInterfaceRelease, (InterfaceHandle,), ptr)
 end
 
 mutable struct CameraList <: SpinObject
@@ -146,6 +180,12 @@ mutable struct CameraList <: SpinObject
     end
 end
 
+_finalize(obj::CameraList) = _finalize(obj) do ptr
+    err = @unchecked_call(:spinCameraListClear, (CameraListHandle,), ptr)
+    @checked_call(:spinCameraListDestroy, (CameraListHandle,), ptr)
+    _check(err, :spinCameraListClear)
+end
+
 mutable struct Camera <: SpinObject
     handle::CameraHandle
     system::System # needed to maintain a reference to the "system" instance
@@ -159,6 +199,17 @@ mutable struct Camera <: SpinObject
                       handle(lst), i - 1, ref)
         return finalizer(_finalize, new(ref[], sys))
     end
+end
+
+function _finalize(obj::Camera)
+    ptr = _take_handle!(obj)
+    if _isinitialized(ptr)
+        _deinitialize(ptr)
+    end
+    if !isnull(ptr)
+        @checked_call(:spinCameraRelease, (CameraHandle,), ptr)
+    end
+    return nothing
 end
 
 # The `parent` member of a node map is needed to keep a reference on the
@@ -212,6 +263,14 @@ mutable struct Node <: SpinObject
             "out of bounds index in Spinnaker ", shortname(nodemap))
         return finalizer(_finalize, new(ref[], nodemap))
     end
+end
+
+function _finalize(obj::Node)
+    ptr = _take_handle!(obj)
+    isnull(ptr) || @checked_call(:spinNodeMapReleaseNode,
+                                 (NodeMapHandle, NodeHandle),
+                                 handle(parent(obj)), ptr)
+    return nothing
 end
 
 """
@@ -307,4 +366,17 @@ mutable struct Image <: SpinObject
     Image(handle::ImageHandle, created::Bool) =
         finalizer(_finalize, new(handle, created))
     Image() = Image(ImageHandle(0), false)
+end
+
+function _finalize(obj::Image)
+    ptr = _take_handle!(obj)
+    if !isnull(ptr)
+        if getfield(obj, :created)
+            setfield!(obj, :created, false)
+            @checked_call(:spinImageDestroy, (ImageHandle,), ptr)
+        else
+            @checked_call(:spinImageRelease, (ImageHandle,), ptr)
+        end
+    end
+    return nothing
 end
