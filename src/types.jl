@@ -49,7 +49,7 @@ end
 mutable struct System <: SpinObject
     handle::SystemHandle
     function System()
-        ref = Ref{SystemHandle}()
+        ref = Ref{SystemHandle}(0)
         @checked_call(:spinSystemGetInstance, (Ptr{SystemHandle},), ref)
         return finalizer(_finalize, new(ref[]))
     end
@@ -63,7 +63,7 @@ mutable struct InterfaceList <: SpinObject
         check(sys)
 
         # Create an empty interface list.
-        ref = Ref{InterfaceListHandle}()
+        ref = Ref{InterfaceListHandle}(0)
         @checked_call(:spinInterfaceListCreateEmpty,
                       (Ptr{InterfaceListHandle},), ref)
 
@@ -88,7 +88,7 @@ mutable struct Interface <: SpinObject
         1 ≤ i ≤ length(lst) || error(
             "out of bound index in Spinnaker ", shortname(lst))
         sys = check(system(check(lst)))
-        ref = Ref{InterfaceHandle}()
+        ref = Ref{InterfaceHandle}(0)
         @checked_call(:spinInterfaceListGet,
                       (InterfaceListHandle, Csize_t,
                        Ptr{InterfaceHandle}),
@@ -106,7 +106,7 @@ mutable struct CameraList <: SpinObject
         check(sys)
 
         # Create an empty camera list.
-        ref = Ref{CameraListHandle}()
+        ref = Ref{CameraListHandle}(0)
         @checked_call(:spinCameraListCreateEmpty,
                       (Ptr{CameraListHandle},), ref)
 
@@ -128,7 +128,7 @@ mutable struct CameraList <: SpinObject
         sys = check(system(check(int)))
 
         # Create an empty camera list.
-        ref = Ref{CameraListHandle}()
+        ref = Ref{CameraListHandle}(0)
         @checked_call(:spinCameraListCreateEmpty,
                       (Ptr{CameraListHandle},), ref)
 
@@ -153,7 +153,7 @@ mutable struct Camera <: SpinObject
         1 ≤ i ≤ length(lst) || error(
             "out of bound index in Spinnaker ", shortname(lst))
         sys = check(system(check(lst)))
-        ref = Ref{CameraHandle}()
+        ref = Ref{CameraHandle}(0)
         @checked_call(:spinCameraListGet,
                       (CameraListHandle, Csize_t, Ptr{CameraHandle}),
                       handle(lst), i - 1, ref)
@@ -161,36 +161,134 @@ mutable struct Camera <: SpinObject
     end
 end
 
-# FIXME: not yet interfaced
-
-mutable struct NodeMap <: SpinObject
+# The `parent` member of a node map is needed to keep a reference on the
+# associated object to avoid it being garbage collected while the node map is
+# in use.  There are no functions in the SDK to release or destroy a node map,
+# so there are no needs for a finalizer and a node map may be immutable.
+struct NodeMap <: SpinObject
     handle::NodeMapHandle
-    system::System # needed to maintain a reference to the "system" instance
+    parent::Union{System,Interface,Camera}
 end
 
+# The `parent` member of a node is needed to keep a reference on the associated
+# mode map and its parent object so as to avoid them being garbage collected
+# while the node is in use.  The function `spinNodeMapReleaseNode` must be
+# called to release a node, so a node must have a finalizer and is thus a
+# mutable object.
 mutable struct Node <: SpinObject
     handle::NodeHandle
-    system::System # needed to maintain a reference to the "system" instance
     parent::NodeMap # needed to maintain a reference to the parent node map instance
-    function Node(lst::NodeMap, str::AbstractString)
-        sys = check(system(check(lst)))
-        ref = Ref{NodeHandle}()
+    function Node(nodemap::NodeMap, str::AbstractString)
+        check(parent(nodemap))
+        ref = Ref{NodeHandle}(0)
         @checked_call(:spinNodeMapGetNode,
                       (NodeMapHandle, Cstring, Ptr{NodeHandle}),
-                      lst, str, ref)
-        return finalizer(_finalize, new(ref[], sys, lst))
+                      handle(nodemap), str, ref)
+        return finalizer(_finalize, new(ref[], nodemap))
     end
-    function Node(lst::NodeMap, i::Integer)
-        sys = check(system(check(lst)))
-        1 ≤ i ≤ length(lst) || error(
-            "out of bound index in Spinnaker ", shortname(lst))
-        ref = Ref{NodeHandle}()
-        @checked_call(:spinNodeMapGetNodeByIndex,
-                      (NodeMapHandle, Csize_t, Ptr{NodeHandle}),
-                      lst, i - 1, ref)
-        _check(err, :spinNodeMapGetNodeByIndex)
-        return finalizer(_finalize, new(ref[], sys, lst))
+    function Node(nodemap::NodeMap, i::Integer)
+        # Retrieving the length of the node map costs some time, but the error
+        # returned by spinNodeMapGetNodeByIndex when the index is invalid is
+        # SPINNAKER_ERR_ERROR which is not very indicative.  So we only compare
+        # the index to the node map length in case of error.  When error is
+        # SPINNAKER_ERR_ERROR while the index is in bounds (which does occur),
+        # a "null" node is returned.
+        check(parent(nodemap))
+        ref = Ref{NodeHandle}(0)
+        inbounds = (i ≥ 1) # check lower bound
+        if inbounds
+            err = @unchecked_call(:spinNodeMapGetNodeByIndex,
+                                  (NodeMapHandle, Csize_t, Ptr{NodeHandle}),
+                                  handle(nodemap), i - 1, ref)
+            if err != SPINNAKER_ERR_SUCCESS
+                inbounds &= (i ≤ length(nodemap)) # check upper bound
+                if inbounds && err != SPINNAKER_ERR_ERROR
+                    # error not due to out of bounds index
+                    throw_call_error(err, :spinNodeMapGetNodeByIndex)
+                end
+            end
+        end
+        inbounds || error(
+            "out of bounds index in Spinnaker ", shortname(nodemap))
+        return finalizer(_finalize, new(ref[], nodemap))
     end
+end
+
+"""
+    SpinnakerCameras.NodeType
+
+enumeration of the possible types of a node.
+
+"""
+@enum NodeType::Cenum begin
+    ValueNode
+    BaseNode
+    IntegerNode
+    BooleanNode
+    FloatNode
+    CommandNode
+    StringNode
+    RegisterNode
+    EnumerationNode
+    EnumEntryNode
+    CategoryNode
+    PortNode
+    UnknownNode = -1
+end
+
+"""
+    SpinnakerCameras.AccessMode
+
+enumeration of the possible access modes of a node.
+
+"""
+@enum AccessMode::Cenum begin
+    NI
+    NA
+    WO
+    RO
+    RW
+    UndefinedAccesMode
+    CycleDetectAccesMode
+end
+
+"""
+    SpinnakerCameras.Visibility
+
+enumeration of the possible recommended visibilities of a node.
+
+"""
+@enum Visibility::Cenum begin
+    Beginner = 0
+    Expert = 1
+    Guru = 2
+    Invisible = 3
+    UndefinedVisibility = 99
+end
+
+"""
+    SpinnakerCameras.CachingMode
+
+enumeration of the possible caching modes of a register.
+
+"""
+@enum CachingMode::Cenum begin
+    NoCache              # Do not use cache
+    WriteThrough         # Write to cache and register
+    WriteAround          # Write to register, write to cache on read
+    UndefinedCachingMode # Not yet initialized
+end
+
+"""
+    SpinnakerCameras.NameSpace
+
+enumeration of the possible namespaces of a register.
+
+"""
+@enum NameSpace::Cenum begin
+    Custom             # name resides in custom namespace
+    Standard           # name resides in one of the standard namespaces
+    UndefinedNameSpace # Object is not yet initialized
 end
 
 mutable struct Image <: SpinObject

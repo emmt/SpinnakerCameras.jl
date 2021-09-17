@@ -5,6 +5,10 @@
 #
 #------------------------------------------------------------------------------
 
+# Make sure to initialize handles and references to handles with NULL.
+Base.Ref{T}() where {T<:Ptr{<:OpaqueObject}} = Ref{T}(0)
+Base.Ptr{T}() where {T<:OpaqueObject} = Ptr{T}(0)
+
 to_bool(x::SpinBool) = (x != zero(x))
 
 """
@@ -49,6 +53,8 @@ shortname(::Type{<:InterfaceList}) = "interface list"
 shortname(::Type{<:CameraList}) = "camera list"
 shortname(::Type{<:Camera}) = "camera"
 shortname(::Type{<:Image}) = "image"
+shortname(::Type{<:Node}) = "node"
+shortname(::Type{<:NodeMap}) = "node map"
 
 """
     SpinnakerCameras.check(obj) -> obj
@@ -75,6 +81,7 @@ function _finalize(func::Function, obj::SpinObject)
 end
 
 # Get length/size of some Spinnaker objects.
+# FIXME: spinNodeMapGetNumNodes seems broken
 for (jl_func, type, c_func) in (
     (:length, :InterfaceList, :spinInterfaceListGetSize),
     #(:sizeof, :Image,         :spinImageGetSize),
@@ -84,13 +91,39 @@ for (jl_func, type, c_func) in (
     @eval begin
         function $jl_func(obj::$type)
             isnull(obj) && return 0
-            ref = Ref{Csize_t}()
+            ref = Ref{Csize_t}(0)
             @checked_call($c_func, ($handle_type, Ptr{Csize_t}),
                           handle(obj), ref)
             return Int(ref[])
         end
     end
 end
+
+#------------------------------------------------------------------------------
+# Methods for properties of any Spinnaker object type.
+#
+# Specialize `getproperty` and `setproperty!` in the name of the member (for
+# type-stability and faster code).
+getproperty(obj::SpinObject, sym::Symbol) = getproperty(obj, Val(sym))
+setproperty!(obj::SpinObject, sym::Symbol, val) =
+    setproperty!(obj, Val(sym), val)
+#
+# The following metgods are to deal with errors.
+getproperty(obj::T, ::Val{M}) where {T<:SpinObject,M} =
+    throw_unknown_field(T, M)
+
+setproperty!(obj::T, ::Val{M}, val) where {T<:SpinObject,M} =
+    if M in propertynames(obj)
+        throw_read_only_field(T, M)
+    else
+        throw_unknown_field(T, M)
+    end
+
+@noinline throw_unknown_field(T::Type, sym::Union{Symbol,AbstractString}) =
+    throw(ErrorException("objects of type $T have no field `$sym`"))
+
+@noinline throw_read_only_field(T::Type, sym::Union{Symbol,AbstractString}) =
+    throw(ErrorException("field `$sym` of objects of type $T is read-only"))
 
 #------------------------------------------------------------------------------
 # SYSTEM
@@ -104,6 +137,7 @@ are implemented:
     sys.cameras        # yields the list of cameras
     sys.interfaces     # yields the list of interfaces
     sys.libraryversion # yields the version number of the SDK library
+    sys.tlnodemap      # yields the transport layer node map
 
 """ System
 
@@ -114,12 +148,8 @@ end
 propertynames(::System) = (
     :cameras,
     :interfaces,
-    :libraryversion)
-
-getproperty(obj::System, sym::Symbol) = getproperty(obj, Val(sym))
-
-setproperty!(obj::System, sym::Symbol, val) =
-    error("members of Spinnaker ", shortname(obj), " are read-only")
+    :libraryversion,
+    :tlnodemap)
 
 getproperty(sys::System, ::Val{:cameras}) = CameraList(sys)
 getproperty(sys::System, ::Val{:interfaces}) = InterfaceList(sys)
@@ -174,7 +204,7 @@ _finalize(obj::InterfaceList) = _finalize(obj) do ptr
 end
 
 # Make interface lists and camera lists iterable.
-function iterate(itr::Union{InterfaceList,CameraList},
+function iterate(itr::Union{InterfaceList,CameraList,NodeMap},
                  state::NTuple{2,Int} = (1, length(itr)))
     idx, len = state
     if idx ≤ len
@@ -188,19 +218,19 @@ end
 # INTERFACES
 
 """
-    int = SpinnakerCameras.Interface(lst, i)
+    SpinnakerCameras.Interface(lst, i)
 
 yields the `i`-th entry of Spinnaker interface list `lst`.  This is the same as
 `lst[i]`.
 
+The following properties are implemented an interface instance:
+
+    interface.cameras   # yields the list of cameras of the interface
+    interface.tlnodemap # yields the transport layer node map of the interface
+
 """ Interface
 
-propertynames(::Interface) = (:cameras,)
-
-getproperty(obj::Interface, sym::Symbol) = getproperty(obj, Val(sym))
-
-setproperty!(obj::Interface, sym::Symbol, val) =
-    error("members of Spinnaker ", shortname(obj), " are read-only")
+propertynames(::Interface) = (:cameras, :tlnodemap)
 
 getproperty(obj::Interface, ::Val{:cameras}) = CameraList(obj)
 
@@ -241,6 +271,8 @@ end
 
 #------------------------------------------------------------------------------
 # CAMERAS
+
+propertynames(::Camera) = (:nodemap, :tldevicenodemap, :tlstreamnodemap)
 
 """
     SpinnakerCameras.Camera(lst, i)
@@ -319,7 +351,7 @@ for (jl_func, c_func) in ((:isinitialized, :spinCameraIsInitialized),
         $jl_func(obj::Camera) = $_jl_func(handle(obj))
         function $_jl_func(ptr::CameraHandle)
             isnull(ptr) && return false
-            ref = Ref{SpinBool}()
+            ref = Ref{SpinBool}(false)
             @checked_call($c_func, (CameraHandle, Ptr{SpinBool}), ptr, ref)
             return to_bool(ref[])
         end
@@ -339,10 +371,35 @@ function _finalize(obj::Camera)
 end
 
 #------------------------------------------------------------------------------
-# NODES
+# NODE MAPS AND NODES
 
-getindex(lst::NodeMap, idx::Integer) = Node(lst, idx)
-getindex(lst::NodeMap, str::AbstractString) = Node(lst, str)
+for (T, key, func) in (
+    (:System,    :tlnodemap,       :spinSystemGetTLNodeMap),
+    (:Interface, :tlnodemap,       :spinInterfaceGetTLNodeMap),
+    (:Camera,    :nodemap,         :spinCameraGetNodeMap),
+    (:Camera,    :tldevicenodemap, :spinCameraGetTLDeviceNodeMap),
+    (:Camera,    :tlstreamnodemap, :spinCameraGetTLStreamNodeMap))
+    @eval begin
+        function getproperty(obj::$T, ::$(Val{key}))
+            ref = Ref{NodeMapHandle}(0)
+            @checked_call($func, ($(Symbol(T,"Handle")), Ptr{NodeMapHandle}),
+                          handle(obj), ref)
+            return NodeMap(ref[], obj)
+        end
+    end
+end
+
+parent(obj::NodeMap) = getfield(obj, :parent)
+parent(obj::Node) = getfield(obj, :parent)
+
+getindex(obj::NodeMap, idx::Integer) = Node(obj, idx)
+getindex(obj::NodeMap, str::AbstractString) = Node(obj, str)
+
+show(io::IO, ::MIME"text/plain", obj::NodeMap) =
+    print(io, "SpinnakerCameras.NodeMap: ", length(obj), " node(s)")
+
+show(io::IO, ::MIME"text/plain", obj::Node) =
+    print(io, "SpinnakerCameras.Node: name = \"", obj.name, "\"")
 
 """
     SpinnakerCameras.getvalue(T, node[, verif])
@@ -389,14 +446,14 @@ for (jl_func, type, c_func) in (
     (:getmin,   Cdouble, :spinFloatGetMin),
     (:getmax,   Cdouble, :spinFloatGetMAx),)
     @eval function $jl_func(::Type{$type}, node::Node)
-        ref = Ref{$type}()
+        ref = Ref{$type}(0)
         @checked_call($c_func, (NodeHandle, Ptr{$type}), handle(node), ref)
         return ref[]
     end
     if jl_func === :getvalue
         c_func_ex = Symbol(c_func, "Ex")
         @eval function $jl_func(::Type{$type}, node::Node, verif::Bool)
-            ref = Ref{$type}()
+            ref = Ref{$type}(0)
             @checked_call($c_func_ex, (NodeHandle, SpinBool, Ptr{$type}),
                           handle(node), verif, ref)
             return ref[]
@@ -455,7 +512,7 @@ for (jl_func, c_func) in ((:isavailable,   :spinNodeIsAvailable),
         $jl_func(obj::Node) = $_jl_func(handle(obj))
         function $_jl_func(ptr::NodeHandle)
             isnull(ptr) && return false
-            ref = Ref{SpinBool}()
+            ref = Ref{SpinBool}(false)
             @checked_call($c_func, (NodeHandle, Ptr{SpinBool}),
                           handle(node), ref)
             return to_bool(ref[])
@@ -466,13 +523,64 @@ end
 isequal(a::Node, b::Node) = _isequal(ghandle(a), handle(b))
 function _isequal(a::NodeHandle, b::NodeHandle)
     (isnull(a) || isnull(b)) && return false
-    ref = Ref{SpinBool}()
+    ref = Ref{SpinBool}(false)
     @checked_call(:spinNodeIsEqual,
                   (NodeHandle, NodeHandle, Ptr{SpinBool}), a, b, ref)
     return to_bool(ref[])
 end
 
-parent(obj::Node) = getfield(obj, :parent)
+propertynames(::Node) = (
+    :accessmode,
+    :name,
+    :cachingmode,
+    :namespace,
+    :visibility,
+    :tooltip,
+    :displayname,
+    :type,
+    :pollingtime)
+
+# Implement `getproperty` for node objects.  Note that a node handle may be
+# NULL (see comments about calling `spinNodeMapGetNodeByIndex`), so a default
+# value is provided in that case.
+for (sym, func, T, def) in (
+    (:accessmode,  :spinNodeGetAccessMode,  AccessMode,  UndefinedAccesMode),
+    (:name,        :spinNodeGetName,        Cstring,     ""),
+    (:cachingmode, :spinNodeGetCachingMode, CachingMode, UndefinedCachingMode),
+    (:namespace,   :spinNodeGetNameSpace,   NameSpace,   UndefinedNameSpace),
+    (:visibility,  :spinNodeGetVisibility,  Visibility,  UndefinedVisibility),
+    (:tooltip,     :spinNodeGetToolTip,     Cstring,     ""),
+    (:displayname, :spinNodeGetDisplayName, Cstring,     ""),
+    (:type,        :spinNodeGetType,        NodeType,    UnknownNode),
+    (:pollingtime, :spinNodeGetPollingTime, Int64,       0))
+    if T === Cstring
+        @eval function getproperty(obj::Node, ::$(Val{sym}))
+            isnull(handle(obj)) && return $def
+            local buf
+            len = 0
+            ptr = Ptr{UInt8}(0)
+            while true
+                siz = Ref{Csize_t}(len)
+                @checked_call($func,
+                              (NodeHandle, Ptr{UInt8}, Ptr{Csize_t}),
+                              handle(obj), ptr, siz)
+                if len > 0
+                    return String(resize!(buf, siz[] - 1))
+                end
+                len = siz[]
+                buf = Vector{UInt8}(undef, len)
+                ptr = pointer(buf)
+            end
+        end
+    else
+        @eval function getproperty(obj::Node, ::$(Val{sym}))
+            isnull(handle(obj)) && return $def
+            ref = Ref{$T}($def)
+            @checked_call($func, (NodeHandle, Ptr{$T}), handle(obj), ref)
+            return ref[]
+        end
+    end
+end
 
 function _finalize(obj::Node)
     ptr = handle(obj)
@@ -480,8 +588,7 @@ function _finalize(obj::Node)
         _clear_handle!(obj)
         @checked_call(:spinNodeMapReleaseNode,
                       (NodeMapHandle, NodeHandle),
-                      check(parent(node)), # FIXME:
-                      ptr)
+                      handle(parent(obj)), ptr)
     end
     return nothing
 end
