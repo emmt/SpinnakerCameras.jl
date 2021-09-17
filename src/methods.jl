@@ -232,7 +232,7 @@ end
 yields the `i`-th entry of Spinnaker interface list `lst`.  This is the same as
 `lst[i]`.
 
-The following properties are implemented an interface instance:
+The following properties are implemented for interface instance:
 
     interface.cameras   # yields the list of cameras of the interface
     interface.tlnodemap # yields the transport layer node map of the interface
@@ -254,11 +254,12 @@ yield a list of Spinnaker cameras for the system `sys` or for the interface
 `int`.   This is the same as `sys.cameras` and `int.cameras` respectively.
 
 Call `length(lst)` to retrieve the number of cameras and use syntax `lst[i]` to
-get the `i`-th camera.
+get the `i`-th camera or `lst[ser]` to retrieve a camera by its serial number
+`ser` (a string).
 
 """ CameraList
 
-getindex(lst::CameraList, i::Integer) = Camera(lst, i)
+getindex(lst::CameraList, idx::Union{Integer,AbstractString}) = Camera(lst, idx)
 
 empty!(obj::CameraList) = begin
     @checked_call(:spinCameraListClear, (CameraListHandle,), handle(obj))

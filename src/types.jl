@@ -187,17 +187,12 @@ mutable struct CameraList <: SpinObject
     parent::System # needed to maintain a reference to the "system" instance
 
     function CameraList(sys::System)
-        # Check argument.
+        # Check system has not been finalized.
         check(sys)
 
-        # Create an empty camera list.
-        ref = Ref{CameraListHandle}(0)
-        @checked_call(:spinCameraListCreateEmpty,
-                      (Ptr{CameraListHandle},), ref)
-
-        # Instanciate the object and associate its finalizer (in case of
-        # subsequent errors).
-        lst = finalizer(_finalize, new(ref[], sys))
+        # Instanciate the object with an empty camera list and associate its
+        # finalizer (in case of subsequent errors).
+        lst = finalizer(_finalize, new(_create(CameraListHandle), sys))
 
         # Retrieve the camera list from the system instance.
         @checked_call(:spinSystemGetCameras,
@@ -212,14 +207,9 @@ mutable struct CameraList <: SpinObject
         # Check argument and get object system.
         sys = check(parent(check(int)))
 
-        # Create an empty camera list.
-        ref = Ref{CameraListHandle}(0)
-        @checked_call(:spinCameraListCreateEmpty,
-                      (Ptr{CameraListHandle},), ref)
-
-        # Instanciate the object and associate its finalizer (in case of
-        # subsequent errors).
-        lst = finalizer(_finalize, new(ref[], sys))
+        # Instanciate the object with an empty camera list and associate its
+        # finalizer (in case of subsequent errors).
+        lst = finalizer(_finalize, new(_create(CameraListHandle), sys))
 
         # Retrieve the camera list for the interface.
         @checked_call(:spinInterfaceGetCameras,
@@ -229,6 +219,13 @@ mutable struct CameraList <: SpinObject
         # Return the instanciated object.
         return lst
     end
+end
+
+_create(::Type{CameraListHandle}) = begin
+    ref = Ref{CameraListHandle}(0)
+    @checked_call(:spinCameraListCreateEmpty,
+                  (Ptr{CameraListHandle},), ref)
+    return ref[]
 end
 
 _finalize(obj::CameraList) = _finalize(obj) do ptr
@@ -248,6 +245,14 @@ mutable struct Camera <: SpinObject
         @checked_call(:spinCameraListGet,
                       (CameraListHandle, Csize_t, Ptr{CameraHandle}),
                       handle(lst), i - 1, ref)
+        return finalizer(_finalize, new(ref[], sys))
+    end
+    function Camera(lst::CameraList, str::AbstractString)
+        sys = check(parent(check(lst)))
+        ref = Ref{CameraHandle}(0)
+        @checked_call(:spinCameraListGetBySerial,
+                      (CameraListHandle, Cstring, Ptr{CameraHandle}),
+                      handle(lst), str, ref)
         return finalizer(_finalize, new(ref[], sys))
     end
 end
