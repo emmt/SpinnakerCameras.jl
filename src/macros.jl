@@ -18,10 +18,10 @@ as a string or as a symbol.  Example:
                     handle(system), ref)
 
 is equivalent to (`lib` is the constant string the path to the Spinnaker
-dynamic library and `Cint` is the type of the result returned by all functions
+dynamic library and `Err` is the type of the result returned by all functions
 of the Spinnaker C SDK):
 
-    err = ccall((:spinSystemGetLibraryVersion, lib), Cint,
+    err = ccall((:spinSystemGetLibraryVersion, lib), Err,
                 (SystemHandle, Ptr{LibraryVersion},),
                 handle(system), ref)
 
@@ -30,7 +30,7 @@ or
    err = @ccall lib.spinSystemGetLibraryVersion(
        handle(system)::SystemHandle,
        ref::Ptr{LibraryVersion}
-   )::Cint
+   )::Err
 
 """
 macro unchecked_call(func, args...)
@@ -50,10 +50,10 @@ symbol.  Example:
                   handle(system), ref)
 
 is equivalent to (`lib` is the constant string the path to the Spinnaker
-dynamic library and `Cint` is the type of the result returned by all functions
+dynamic library and `Err` is the type of the result returned by all functions
 of the Spinnaker C SDK):
 
-    let err = ccall((:spinSystemGetLibraryVersion, lib), Cint,
+    let err = ccall((:spinSystemGetLibraryVersion, lib), Err,
                     (SystemHandle, Ptr{LibraryVersion},),
                     handle(system), ref)
         _check(err, :spinSystemGetLibraryVersion)
@@ -71,7 +71,7 @@ _quote_expr(sym::Symbol) = Expr(:quote, sym)
 
 # Yield the expression to call a function of the SDK and return its result.
 _unchecked_call_expr(func, args...) =
-    Expr(:call, :ccall, Expr(:tuple, _quote_expr(func), :lib), :Cint, args...)
+    Expr(:call, :ccall, Expr(:tuple, _quote_expr(func), :lib), :Err, args...)
 
 # Yield the expression to call a function of the SDK and check its result.
 _checked_call_expr(func, args...) =

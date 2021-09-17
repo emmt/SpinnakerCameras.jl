@@ -1,16 +1,19 @@
 module TestingSpinnakerCameras
 
-using SpinnakerCameras: SpinnakerCameras, Cenum
+using SpinnakerCameras:
+    SPINNAKER_ERR_NOT_IMPLEMENTED,
+    SpinnakerCameras,
+    Cenum
 
 using Test
 
 @testset "Errors" begin
-    err = SpinnakerCameras.CallError(-1003, :spinFunc)
+    err = SpinnakerCameras.CallError(SPINNAKER_ERR_NOT_IMPLEMENTED, :spinFunc)
     str = let buf = IOBuffer();
         show(buf, MIME("text/plain"), err);
         String(take!(buf));
     end
-    @test str == "error SPINNAKER_ERR_NOT_IMPLEMENTED (-1003) returned by function `spinFunc`"
+    @test str == "error SPINNAKER_ERR_NOT_IMPLEMENTED returned by function `spinFunc`"
 end
 
 @testset "Images" begin
