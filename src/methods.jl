@@ -446,8 +446,7 @@ for (T, key, func) in (
     end
 end
 
-getindex(obj::NodeMap, idx::Integer) = Node(obj, idx)
-getindex(obj::NodeMap, str::AbstractString) = Node(obj, str)
+getindex(obj::NodeMap, idx::Union{AbstractString,Integer}) = Node(obj, idx)
 
 show(io::IO, ::MIME"text/plain", obj::NodeMap) =
     print(io, "SpinnakerCameras.NodeMap: ", length(obj), " node(s)")
@@ -455,6 +454,9 @@ show(io::IO, ::MIME"text/plain", obj::NodeMap) =
 show(io::IO, ::MIME"text/plain", obj::Node) =
     print(io, "SpinnakerCameras.Node: name = \"", obj.name, "\", type = ",
           Symbol(obj.type))
+
+poll(nodemap::NodeMap, timestamp::Integer) =
+    @checked_call(:spinNodeMapPoll, (NodeMapHandle, Int64), nodemap, timestamp)
 
 """
     SpinnakerCameras.getvalue(T, node[, verif])
