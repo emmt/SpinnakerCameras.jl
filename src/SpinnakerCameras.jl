@@ -22,7 +22,6 @@ import Base:
 
 include("macros.jl")
 include("types.jl")
-include("errors.jl")
 include("methods.jl")
 include("images.jl")
 
