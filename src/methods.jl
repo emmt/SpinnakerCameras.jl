@@ -447,7 +447,8 @@ show(io::IO, ::MIME"text/plain", obj::NodeMap) =
     print(io, "SpinnakerCameras.NodeMap: ", length(obj), " node(s)")
 
 show(io::IO, ::MIME"text/plain", obj::Node) =
-    print(io, "SpinnakerCameras.Node: name = \"", obj.name, "\"")
+    print(io, "SpinnakerCameras.Node: name = \"", obj.name, "\", type = ",
+          Symbol(obj.type))
 
 """
     SpinnakerCameras.getvalue(T, node[, verif])
