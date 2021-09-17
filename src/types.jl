@@ -254,10 +254,21 @@ end
 
 # The `parent` member of a node is needed to keep a reference on the associated
 # mode map and its parent object so as to avoid them being garbage collected
-# while the node is in use.  The function `spinNodeMapReleaseNode` must be
-# called to release a node, so a node must have a finalizer and is thus a
-# mutable object.
-mutable struct Node <: SpinObject
+# while the node is in use.
+#
+# The function `spinNodeMapReleaseNode` may be called to release a node, in
+# that case a node must have a finalizer and thus be a mutable object.  In the
+# examples, `spinNodeMapReleaseNode` is however never called and the
+# documentation says that releasing a node is not mandatory:
+#
+#    "If [spinNodeMapReleaseNode] is not explicitly called, the [node] handle
+#     will be released upon the release of the camera handle."
+#
+# I tried a mutable version whose finalizer calls `spinNodeMapReleaseNode` and
+# got lots of `SPINNAKER_ERR_INVALID_HANDLE` errors.  This problem disappeared
+# when `spinNodeMapReleaseNode` was never called.  So the current
+# implementation use immutable nodes.
+struct Node <: SpinObject
     handle::NodeHandle
     parent::NodeMap # needed to maintain a reference to the parent node map instance
     function Node(nodemap::NodeMap, str::AbstractString)
@@ -266,15 +277,15 @@ mutable struct Node <: SpinObject
         @checked_call(:spinNodeMapGetNode,
                       (NodeMapHandle, Cstring, Ptr{NodeHandle}),
                       handle(nodemap), str, ref)
-        return finalizer(_finalize, new(ref[], nodemap))
+        return new(ref[], nodemap)
     end
     function Node(nodemap::NodeMap, i::Integer)
         # Retrieving the length of the node map costs some time, but the error
-        # returned by spinNodeMapGetNodeByIndex when the index is invalid is
-        # SPINNAKER_ERR_ERROR which is not very indicative.  So we only compare
-        # the index to the node map length in case of error.  When error is
-        # SPINNAKER_ERR_ERROR while the index is in bounds (which does occur),
-        # a "null" node is returned.
+        # returned by `spinNodeMapGetNodeByIndex` when the index is invalid is
+        # `SPINNAKER_ERR_ERROR` which is not very indicative.  So we only
+        # compare the index to the node map length in case of error.  When
+        # error is `SPINNAKER_ERR_ERROR` while the index is in bounds (which
+        # does occur), a node with a "null" handle is returned.
         check(parent(nodemap))
         ref = Ref{NodeHandle}(0)
         inbounds = (i ≥ 1) # check lower bound
@@ -292,16 +303,8 @@ mutable struct Node <: SpinObject
         end
         inbounds || error(
             "out of bounds index in Spinnaker ", shortname(nodemap))
-        return finalizer(_finalize, new(ref[], nodemap))
+        return new(ref[], nodemap)
     end
-end
-
-function _finalize(obj::Node)
-    ptr = _take_handle!(obj)
-    isnull(ptr) || @checked_call(:spinNodeMapReleaseNode,
-                                 (NodeMapHandle, NodeHandle),
-                                 handle(parent(obj)), ptr)
-    return nothing
 end
 
 """
