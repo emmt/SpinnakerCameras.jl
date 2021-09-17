@@ -132,7 +132,7 @@ end
 
 mutable struct InterfaceList <: SpinObject
     handle::InterfaceListHandle
-    system::System # needed to maintain a reference to the "system" instance
+    parent::System # needed to maintain a reference to the "system" instance
     function InterfaceList(sys::System)
         # Check argument.
         check(sys)
@@ -146,7 +146,7 @@ mutable struct InterfaceList <: SpinObject
         # subsequent errors).
         lst = finalizer(_finalize, new(ref[], sys))
 
-        # Retrieve the interface list from the system.
+        # Retrieve the interface list from the parent system.
         @checked_call(:spinSystemGetInterfaces,
                       (SystemHandle, InterfaceListHandle),
                       handle(sys), handle(lst))
@@ -164,11 +164,11 @@ end
 
 mutable struct Interface <: SpinObject
     handle::InterfaceHandle
-    system::System # needed to maintain a reference to the "system" instance
+    parent::System # needed to maintain a reference to the "system" instance
     function Interface(lst::InterfaceList, i::Integer)
         1 ≤ i ≤ length(lst) || error(
             "out of bound index in Spinnaker ", shortname(lst))
-        sys = check(system(check(lst)))
+        sys = check(parent(check(lst)))
         ref = Ref{InterfaceHandle}(0)
         @checked_call(:spinInterfaceListGet,
                       (InterfaceListHandle, Csize_t,
@@ -184,7 +184,7 @@ end
 
 mutable struct CameraList <: SpinObject
     handle::CameraListHandle
-    system::System # needed to maintain a reference to the "system" instance
+    parent::System # needed to maintain a reference to the "system" instance
 
     function CameraList(sys::System)
         # Check argument.
@@ -199,7 +199,7 @@ mutable struct CameraList <: SpinObject
         # subsequent errors).
         lst = finalizer(_finalize, new(ref[], sys))
 
-        # Retrieve the camera list from the system.
+        # Retrieve the camera list from the system instance.
         @checked_call(:spinSystemGetCameras,
                       (SystemHandle, CameraListHandle),
                       handle(sys), handle(lst))
@@ -210,7 +210,7 @@ mutable struct CameraList <: SpinObject
 
     function CameraList(int::Interface)
         # Check argument and get object system.
-        sys = check(system(check(int)))
+        sys = check(parent(check(int)))
 
         # Create an empty camera list.
         ref = Ref{CameraListHandle}(0)
@@ -239,11 +239,11 @@ end
 
 mutable struct Camera <: SpinObject
     handle::CameraHandle
-    system::System # needed to maintain a reference to the "system" instance
+    parent::System # needed to maintain a reference to the "system" instance
     function Camera(lst::CameraList, i::Integer)
         1 ≤ i ≤ length(lst) || error(
             "out of bound index in Spinnaker ", shortname(lst))
-        sys = check(system(check(lst)))
+        sys = check(parent(check(lst)))
         ref = Ref{CameraHandle}(0)
         @checked_call(:spinCameraListGet,
                       (CameraListHandle, Csize_t, Ptr{CameraHandle}),

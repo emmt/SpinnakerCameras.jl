@@ -12,13 +12,11 @@ Base.Ptr{T}() where {T<:OpaqueObject} = Ptr{T}(0)
 to_bool(x::SpinBool) = (x != zero(x))
 
 """
-    SpinnakerCameras.isnull(arg)
+    SpinnakerCameras.isnull(ptr)
 
-yields whether `arg` is a null pointer of a Spinnaker object with a null
-handle.
+yields whether `ptr` is a null pointer.
 
 """
-isnull(obj::SpinObject) = isnull(handle(obj))
 isnull(ptr::Ptr{T}) where {T} = (ptr == null_pointer(T))
 
 null_pointer(::Type{T}) where {T} = Ptr{T}(0)
@@ -33,8 +31,12 @@ low-level interface, it shall not be used by the end-user.
 """
 handle(obj::SpinObject) = getfield(obj, :handle)
 
-system(sys::System) = obj
-system(obj::SpinObject) = getfield(obj, :system)
+# Union of types whose instances have a "parent" member.
+const ChildObjects = Union{InterfaceList, Interface,
+                           CameraList, Camera,
+                           NodeMap, Node}
+
+parent(obj::ChildObjects) = getfield(obj, :parent)
 
 """
     SpinnakerCameras.shortname(obj) -> str
@@ -335,9 +337,6 @@ for (T, key, func) in (
         end
     end
 end
-
-parent(obj::NodeMap) = getfield(obj, :parent)
-parent(obj::Node) = getfield(obj, :parent)
 
 getindex(obj::NodeMap, idx::Integer) = Node(obj, idx)
 getindex(obj::NodeMap, str::AbstractString) = Node(obj, str)
