@@ -31,7 +31,7 @@ See [`SpinnakerCameras.Image`](@ref) for properties of images.
 
 """
 function next_image(camera::Camera)
-    ref = Ref{ImageHandle}()
+    ref = Ref{ImageHandle}(0)
     @checked_call(:spinCameraGetNextImage,
                   (CameraHandle, Ptr{ImageHandle}),
                   handle(camera), ref)
@@ -39,7 +39,7 @@ function next_image(camera::Camera)
 end
 
 function next_image(camera::Camera, seconds::Real)
-    ref = Ref{ImageHandle}()
+    ref = Ref{ImageHandle}(0)
     milliseconds = round(Int64, seconds*1_000)
     @checked_call(:spinCameraGetNextImageEx,
                   (CameraHandle, Int64, Ptr{ImageHandle}),
@@ -94,7 +94,7 @@ function Image(pixelformat::Integer,
     height  ≥ 1 || throw(ArgumentError("invalid image height"))
     offsetx ≥ 0 || throw(ArgumentError("invalid image X-offset"))
     offsety ≥ 0 || throw(ArgumentError("invalid image Y-offset"))
-    ref = Ref{ImageHandle}()
+    ref = Ref{ImageHandle}(0)
     @checked_call(
         :spinImageCreateEx,
         (Ptr{ImageHandle}, Csize_t, Csize_t, Csize_t, Csize_t, Cenum, Ptr{Cvoid}),
@@ -155,7 +155,7 @@ for (sym, func, type) in (
     (:width,            :spinImageGetWidth,            Csize_t),)
 
     @eval function getproperty(img::Image, ::$(Val{sym}))
-        ref = Ref{$type}()
+        ref = Ref{$type}(0)
         @checked_call($func, (ImageHandle, Ptr{$type}), handle(img), ref)
         return ref[]
     end
@@ -164,7 +164,7 @@ end
 function getproperty(img::Image, ::Val{:pixelformatname})
     # FIXME: first call with NULL buffer to get the size.
     buf = Vector{UInt8}(undef, 32)
-    siz = Ref{Csize_t}()
+    siz = Ref{Csize_t}(0)
     while true
         siz[] = length(buf)
         err = @unchecked_call(:spinImageGetPixelFormatName,
