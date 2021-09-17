@@ -2,8 +2,19 @@ module TestingSpinnakerCameras
 
 using SpinnakerCameras:
     SPINNAKER_ERR_NOT_IMPLEMENTED,
+    LOG_LEVEL_OFF,
+    LOG_LEVEL_FATAL,
+    LOG_LEVEL_ALERT,
+    LOG_LEVEL_CRIT,
+    LOG_LEVEL_ERROR,
+    LOG_LEVEL_WARN,
+    LOG_LEVEL_NOTICE,
+    LOG_LEVEL_INFO,
+    LOG_LEVEL_DEBUG,
+    LOG_LEVEL_NOTSET,
     SpinnakerCameras,
-    Cenum
+    Cenum,
+    LogLevel
 
 using Test
 
@@ -57,6 +68,12 @@ end
     sys = SpinnakerCameras.System()
     @test isa(VersionNumber(sys), VersionNumber)
     @test isa(sys.libraryversion, VersionNumber)
+    @test_throws ErrorException sys.libraryversion = v"1.2.3"
+    @test isa(sys.logginglevel, LogLevel)
+    for logginglevel in (LOG_LEVEL_ERROR, LOG_LEVEL_WARN)
+        sys.logginglevel = logginglevel
+        @test sys.logginglevel == logginglevel
+    end
     @test isa(sys.interfaces, SpinnakerCameras.InterfaceList)
     @test length(sys.interfaces) ≥ 0
     @test length(empty!(sys.interfaces)) == 0

@@ -160,6 +160,11 @@ are implemented:
     sys.interfaces     # yields the list of interfaces
     sys.libraryversion # yields the version number of the SDK library
     sys.tlnodemap      # yields the transport layer node map
+    sys.logginglevel   # yields the logging level
+
+The `logginglevel` property can be set, the other are read-only.  For example:
+
+    sys.logginglevel = SpinnakerCameras.LOG_LEVEL_INFO
 
 """ System
 
@@ -167,11 +172,23 @@ propertynames(::System) = (
     :cameras,
     :interfaces,
     :libraryversion,
-    :tlnodemap)
+    :tlnodemap,
+    :logginglevel)
 
 getproperty(sys::System, ::Val{:cameras}) = CameraList(sys)
 getproperty(sys::System, ::Val{:interfaces}) = InterfaceList(sys)
 getproperty(sys::System, ::Val{:libraryversion}) = VersionNumber(sys)
+getproperty(sys::System, ::Val{:logginglevel}) = begin
+    ref = Ref{LogLevel}()
+    @checked_call(:spinSystemGetLoggingLevel, (SystemHandle, Ptr{LogLevel}),
+                  handle(sys), ref)
+    return ref[]
+end
+setproperty!(sys::System, key::Val{:logginglevel}, val::Integer) =
+    setproperty!(sys, key, LogLevel(val))
+setproperty!(sys::System, ::Val{:logginglevel}, val::LogLevel) =
+    @checked_call(:spinSystemSetLoggingLevel, (SystemHandle, LogLevel),
+                  handle(sys), val)
 
 """
     SpinnakerCameras.LibraryVersion(sys)

@@ -130,6 +130,27 @@ _finalize(obj::System) = _finalize(obj) do ptr
     @checked_call(:spinSystemReleaseInstance, (SystemHandle,), ptr)
 end
 
+@enum LogLevel::Cint begin
+    LOG_LEVEL_OFF    =  -1 # Logging is off.
+    LOG_LEVEL_FATAL  =   0 # Not used by Spinnaker.
+    LOG_LEVEL_ALERT  = 100 # Not used by Spinnaker.
+    LOG_LEVEL_CRIT   = 200 # Not used by Spinnaker.
+    LOG_LEVEL_ERROR  = 300 # Failures that are non-recoverable without user
+                           # intervention.
+    LOG_LEVEL_WARN   = 400 # Failures that are recoverable without user
+                           # intervention.
+    LOG_LEVEL_NOTICE = 500 # Events such as camera arrival and removal,
+                           # initialization and deinitialization, starting and
+                           # stopping image acquisition, and feature
+                           # modification.
+    LOG_LEVEL_INFO   = 600 # Information about recurring events that are
+                           # generated regularly such as information on
+                           # individual images.
+    LOG_LEVEL_DEBUG  = 700 # Information that can be used to troubleshoot the
+                           # system.
+    LOG_LEVEL_NOTSET = 800 # Logs everything.
+end
+
 mutable struct InterfaceList <: SpinObject
     handle::InterfaceListHandle
     parent::System # needed to maintain a reference to the "system" instance
