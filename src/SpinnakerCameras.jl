@@ -18,7 +18,8 @@ import Base:
     length, size, eltype, show, print, iterate, parent, empty!,
     isvalid, isreadable, iswritable, isequal,
     getindex, setindex!,
-    getproperty, setproperty!, propertynames
+    getproperty, setproperty!, propertynames,
+    unsafe_convert
 
 include("macros.jl")
 include("types.jl")

@@ -180,7 +180,7 @@ mutable struct Interface <: SpinObject
         @checked_call(:spinInterfaceListGet,
                       (InterfaceListHandle, Csize_t,
                        Ptr{InterfaceHandle}),
-                      handle(lst), i - 1, ref)
+                      lst, i - 1, ref)
         return finalizer(_finalize, new(ref[], sys))
     end
 end
@@ -219,7 +219,7 @@ mutable struct Camera <: SpinObject
         ref = Ref{CameraHandle}(0)
         @checked_call(:spinCameraListGet,
                       (CameraListHandle, Csize_t, Ptr{CameraHandle}),
-                      handle(lst), i - 1, ref)
+                      lst, i - 1, ref)
         return finalizer(_finalize, new(ref[], sys))
     end
     function Camera(lst::CameraList, str::AbstractString)
@@ -227,7 +227,7 @@ mutable struct Camera <: SpinObject
         ref = Ref{CameraHandle}(0)
         @checked_call(:spinCameraListGetBySerial,
                       (CameraListHandle, Cstring, Ptr{CameraHandle}),
-                      handle(lst), str, ref)
+                      lst, str, ref)
         return finalizer(_finalize, new(ref[], sys))
     end
 end
@@ -276,7 +276,7 @@ struct Node <: SpinObject
         ref = Ref{NodeHandle}(0)
         @checked_call(:spinNodeMapGetNode,
                       (NodeMapHandle, Cstring, Ptr{NodeHandle}),
-                      handle(nodemap), str, ref)
+                      nodemap, str, ref)
         return new(ref[], nodemap)
     end
     function Node(nodemap::NodeMap, i::Integer)
@@ -292,7 +292,7 @@ struct Node <: SpinObject
         if inbounds
             err = @unchecked_call(:spinNodeMapGetNodeByIndex,
                                   (NodeMapHandle, Csize_t, Ptr{NodeHandle}),
-                                  handle(nodemap), i - 1, ref)
+                                  nodemap, i - 1, ref)
             if err != SPINNAKER_ERR_SUCCESS
                 inbounds &= (i ≤ length(nodemap)) # check upper bound
                 if inbounds && err != SPINNAKER_ERR_ERROR

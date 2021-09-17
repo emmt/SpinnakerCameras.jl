@@ -15,7 +15,7 @@ as a string or as a symbol.  Example:
 
     @unchecked_call(:spinSystemGetLibraryVersion,
                     (SystemHandle, Ptr{LibraryVersion},),
-                    handle(system), ref)
+                    system, ref)
 
 is equivalent to (`lib` is the constant string the path to the Spinnaker
 dynamic library and `Err` is the type of the result returned by all functions
@@ -23,12 +23,12 @@ of the Spinnaker C SDK):
 
     err = ccall((:spinSystemGetLibraryVersion, lib), Err,
                 (SystemHandle, Ptr{LibraryVersion},),
-                handle(system), ref)
+                system, ref)
 
 or
 
    err = @ccall lib.spinSystemGetLibraryVersion(
-       handle(system)::SystemHandle,
+       system::SystemHandle,
        ref::Ptr{LibraryVersion}
    )::Err
 
@@ -47,7 +47,7 @@ symbol.  Example:
 
     @checked_call(:spinSystemGetLibraryVersion,
                   (SystemHandle, Ptr{LibraryVersion},),
-                  handle(system), ref)
+                  system, ref)
 
 is equivalent to (`lib` is the constant string the path to the Spinnaker
 dynamic library and `Err` is the type of the result returned by all functions
@@ -55,7 +55,7 @@ of the Spinnaker C SDK):
 
     let err = ccall((:spinSystemGetLibraryVersion, lib), Err,
                     (SystemHandle, Ptr{LibraryVersion},),
-                    handle(system), ref)
+                    system, ref)
         _check(err, :spinSystemGetLibraryVersion)
     end
 

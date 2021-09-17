@@ -20,7 +20,7 @@ function next_image(camera::Camera)
     ref = Ref{ImageHandle}(0)
     @checked_call(:spinCameraGetNextImage,
                   (CameraHandle, Ptr{ImageHandle}),
-                  handle(camera), ref)
+                  camera, ref)
     return Image(ref[], false)
 end
 
@@ -29,7 +29,7 @@ function next_image(camera::Camera, seconds::Real)
     milliseconds = round(Int64, seconds*1_000)
     @checked_call(:spinCameraGetNextImageEx,
                   (CameraHandle, Int64, Ptr{ImageHandle}),
-                  handle(camera), milliseconds, ref)
+                  camera, milliseconds, ref)
     return Image(ref[], false)
 end
 
@@ -142,7 +142,7 @@ for (sym, func, type) in (
 
     @eval function getproperty(img::Image, ::$(Val{sym}))
         ref = Ref{$type}(0)
-        @checked_call($func, (ImageHandle, Ptr{$type}), handle(img), ref)
+        @checked_call($func, (ImageHandle, Ptr{$type}), img, ref)
         return ref[]
     end
 end
@@ -155,7 +155,7 @@ function getproperty(img::Image, ::Val{:pixelformatname})
         siz[] = length(buf)
         err = @unchecked_call(:spinImageGetPixelFormatName,
                               (ImageHandle, Ptr{UInt8}, Ptr{Csize_t}),
-                              handle(img), buf, siz)
+                              img, buf, siz)
         if err == SPINNAKER_ERR_SUCCESS
             return String(resize!(buf, siz[] - 1))
         elseif err == SPINNAKER_ERR_INVALID_BUFFER

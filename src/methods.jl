@@ -35,6 +35,12 @@ const ChildObjects = Union{InterfaceList, Interface,
 
 parent(obj::ChildObjects) = getfield(obj, :parent)
 
+# A bit of magic to simplify writing calls to the SDK functions.
+for T in (:System, :InterfaceList, :Interface, :CameraList, :Camera,
+          :NodeMap, :Node, :Image)
+    @eval unsafe_convert($(Symbol(T,"Handle")), obj::$T) = handle(obj)
+end
+
 """
     SpinnakerCameras.shortname(obj) -> str
 
@@ -78,7 +84,7 @@ for (jl_func, type, c_func) in (
             isnull(handle(obj)) && return 0
             ref = Ref{Csize_t}(0)
             @checked_call($c_func, ($handle_type, Ptr{Csize_t}),
-                          handle(obj), ref)
+                          obj, ref)
             return Int(ref[])
         end
     end
@@ -181,14 +187,14 @@ getproperty(sys::System, ::Val{:libraryversion}) = VersionNumber(sys)
 getproperty(sys::System, ::Val{:logginglevel}) = begin
     ref = Ref{LogLevel}()
     @checked_call(:spinSystemGetLoggingLevel, (SystemHandle, Ptr{LogLevel}),
-                  handle(sys), ref)
+                  sys, ref)
     return ref[]
 end
 setproperty!(sys::System, key::Val{:logginglevel}, val::Integer) =
     setproperty!(sys, key, LogLevel(val))
 setproperty!(sys::System, ::Val{:logginglevel}, val::LogLevel) =
     @checked_call(:spinSystemSetLoggingLevel, (SystemHandle, LogLevel),
-                  handle(sys), val)
+                  sys, val)
 
 """
     SpinnakerCameras.LibraryVersion(sys)
@@ -200,7 +206,7 @@ function LibraryVersion(sys::System)
     ref = Ref{LibraryVersion}()
     @checked_call(:spinSystemGetLibraryVersion,
                   (SystemHandle, Ptr{LibraryVersion},),
-                  handle(sys), ref)
+                  sys, ref)
     return ref[]
 end
 
@@ -228,14 +234,14 @@ function InterfaceList(system::System)
     interfacelist = InterfaceList(system, nothing)
     @checked_call(:spinSystemGetInterfaces,
                   (SystemHandle, InterfaceListHandle),
-                  handle(system), handle(interfacelist))
+                  system, interfacelist)
     return interfacelist
 end
 
 getindex(lst::InterfaceList, i::Integer) = Interface(lst, i)
 
 empty!(obj::InterfaceList) = begin
-    @checked_call(:spinInterfaceListClear, (InterfaceListHandle,), handle(obj))
+    @checked_call(:spinInterfaceListClear, (InterfaceListHandle,), obj)
     return obj
 end
 
@@ -294,7 +300,7 @@ function CameraList(system::System)
     cameralist = CameraList(system, nothing)
     @checked_call(:spinSystemGetCameras,
                   (SystemHandle, CameraListHandle),
-                  handle(system), handle(cameralist))
+                  system, cameralist)
     return cameralist
 end
 function CameraList(system::System,
@@ -303,8 +309,8 @@ function CameraList(system::System,
     cameralist = CameraList(system, nothing)
     @checked_call(:spinSystemGetCamerasEx,
                   (SystemHandle, SpinBool, SpinBool, CameraListHandle),
-                  handle(system), updateinterfaces, updatecameras,
-                  handle(cameralist))
+                  system, updateinterfaces, updatecameras,
+                  cameralist)
     return cameralist
 end
 
@@ -314,21 +320,21 @@ function CameraList(interface::Interface)
     cameralist = CameraList(parent(check(interface)), nothing)
     @checked_call(:spinInterfaceGetCameras,
                   (InterfaceHandle, CameraListHandle),
-                  handle(interface), handle(cameralist))
+                  interface, cameralist)
     return cameralist
 end
 function CameraList(interface::Interface, updatecameras::Bool)
     cameralist = CameraList(parent(check(interface)), nothing)
     @checked_call(:spinInterfaceGetCamerasEx,
                   (InterfaceHandle, SpinBool, CameraListHandle),
-                  handle(interface), updatecameras, handle(cameralist))
+                  interface, updatecameras, cameralist)
     return cameralist
 end
 
 getindex(lst::CameraList, idx::Union{Integer,AbstractString}) = Camera(lst, idx)
 
 empty!(obj::CameraList) = begin
-    @checked_call(:spinCameraListClear, (CameraListHandle,), handle(obj))
+    @checked_call(:spinCameraListClear, (CameraListHandle,), obj)
     return obj
 end
 
@@ -434,7 +440,7 @@ for (T, key, func) in (
         function getproperty(obj::$T, ::$(Val{key}))
             ref = Ref{NodeMapHandle}(0)
             @checked_call($func, ($(Symbol(T,"Handle")), Ptr{NodeMapHandle}),
-                          handle(obj), ref)
+                          obj, ref)
             return NodeMap(ref[], obj)
         end
     end
@@ -496,7 +502,7 @@ for (jl_func, type, c_func) in (
     (:getmax,   Cdouble, :spinFloatGetMAx),)
     @eval function $jl_func(::Type{$type}, node::Node)
         ref = Ref{$type}(0)
-        @checked_call($c_func, (NodeHandle, Ptr{$type}), handle(node), ref)
+        @checked_call($c_func, (NodeHandle, Ptr{$type}), node, ref)
         return ref[]
     end
     if jl_func === :getvalue
@@ -504,7 +510,7 @@ for (jl_func, type, c_func) in (
         @eval function $jl_func(::Type{$type}, node::Node, verif::Bool)
             ref = Ref{$type}(0)
             @checked_call($c_func_ex, (NodeHandle, SpinBool, Ptr{$type}),
-                          handle(node), verif, ref)
+                          node, verif, ref)
             return ref[]
         end
     end
@@ -563,15 +569,15 @@ for (jl_func, c_func) in ((:isavailable,   :spinNodeIsAvailable),
             isnull(ptr) && return false
             ref = Ref{SpinBool}(false)
             @checked_call($c_func, (NodeHandle, Ptr{SpinBool}),
-                          handle(node), ref)
+                          node, ref)
             return to_bool(ref[])
         end
     end
 end
 
-isequal(a::Node, b::Node) = _isequal(ghandle(a), handle(b))
+isequal(a::Node, b::Node) = _isequal(handle(a), handle(b))
 function _isequal(a::NodeHandle, b::NodeHandle)
-    (isnull(handle(a)) || isnull(handle(b))) && return false
+    (isnull(a) || isnull(b)) && return false
     ref = Ref{SpinBool}(false)
     @checked_call(:spinNodeIsEqual,
                   (NodeHandle, NodeHandle, Ptr{SpinBool}), a, b, ref)
@@ -612,7 +618,7 @@ for (sym, func, T, def) in (
                 siz = Ref{Csize_t}(len)
                 @checked_call($func,
                               (NodeHandle, Ptr{UInt8}, Ptr{Csize_t}),
-                              handle(obj), ptr, siz)
+                              obj, ptr, siz)
                 if len > 0
                     return String(resize!(buf, siz[] - 1))
                 end
@@ -625,7 +631,7 @@ for (sym, func, T, def) in (
         @eval function getproperty(obj::Node, ::$(Val{sym}))
             isnull(handle(obj)) && return $def
             ref = Ref{$T}($def)
-            @checked_call($func, (NodeHandle, Ptr{$T}), handle(obj), ref)
+            @checked_call($func, (NodeHandle, Ptr{$T}), obj, ref)
             return ref[]
         end
     end
