@@ -133,26 +133,12 @@ end
 mutable struct InterfaceList <: SpinObject
     handle::InterfaceListHandle
     parent::System # needed to maintain a reference to the "system" instance
-    function InterfaceList(sys::System)
-        # Check argument.
-        check(sys)
-
-        # Create an empty interface list.
+    function InterfaceList(system::System, ::Nothing)
+        check(system) # system must not have been finalized
         ref = Ref{InterfaceListHandle}(0)
         @checked_call(:spinInterfaceListCreateEmpty,
                       (Ptr{InterfaceListHandle},), ref)
-
-        # Instanciate the object and associate its finalizer (in case of
-        # subsequent errors).
-        lst = finalizer(_finalize, new(ref[], sys))
-
-        # Retrieve the interface list from the parent system.
-        @checked_call(:spinSystemGetInterfaces,
-                      (SystemHandle, InterfaceListHandle),
-                      handle(sys), handle(lst))
-
-        # Return the instanciated object.
-        return lst
+        return finalizer(_finalize, new(ref[], system))
     end
 end
 
@@ -186,46 +172,14 @@ mutable struct CameraList <: SpinObject
     handle::CameraListHandle
     parent::System # needed to maintain a reference to the "system" instance
 
-    function CameraList(sys::System)
-        # Check system has not been finalized.
-        check(sys)
-
-        # Instanciate the object with an empty camera list and associate its
-        # finalizer (in case of subsequent errors).
-        lst = finalizer(_finalize, new(_create(CameraListHandle), sys))
-
-        # Retrieve the camera list from the system instance.
-        @checked_call(:spinSystemGetCameras,
-                      (SystemHandle, CameraListHandle),
-                      handle(sys), handle(lst))
-
-        # Return the instanciated object.
-        return lst
+    # This version of the constructor is to build an empty camera list.
+    function CameraList(sys::System, ::Nothing)
+        check(sys) # system must not have been finalized
+        ref = Ref{CameraListHandle}(0)
+        @checked_call(:spinCameraListCreateEmpty,
+                      (Ptr{CameraListHandle},), ref)
+        return finalizer(_finalize, new(ref[], sys))
     end
-
-    function CameraList(int::Interface)
-        # Check argument and get object system.
-        sys = check(parent(check(int)))
-
-        # Instanciate the object with an empty camera list and associate its
-        # finalizer (in case of subsequent errors).
-        lst = finalizer(_finalize, new(_create(CameraListHandle), sys))
-
-        # Retrieve the camera list for the interface.
-        @checked_call(:spinInterfaceGetCameras,
-                      (InterfaceHandle, CameraListHandle),
-                      handle(int), handle(lst))
-
-        # Return the instanciated object.
-        return lst
-    end
-end
-
-_create(::Type{CameraListHandle}) = begin
-    ref = Ref{CameraListHandle}(0)
-    @checked_call(:spinCameraListCreateEmpty,
-                  (Ptr{CameraListHandle},), ref)
-    return ref[]
 end
 
 _finalize(obj::CameraList) = _finalize(obj) do ptr

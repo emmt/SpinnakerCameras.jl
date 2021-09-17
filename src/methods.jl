@@ -205,6 +205,16 @@ to get the `i`-th interface.
 
 """ InterfaceList
 
+# This constructor creats an empty interface list and retrieve the interface
+# list from the parent system.
+function InterfaceList(system::System)
+    interfacelist = InterfaceList(system, nothing)
+    @checked_call(:spinSystemGetInterfaces,
+                  (SystemHandle, InterfaceListHandle),
+                  handle(system), handle(interfacelist))
+    return interfacelist
+end
+
 getindex(lst::InterfaceList, i::Integer) = Interface(lst, i)
 
 empty!(obj::InterfaceList) = begin
@@ -212,7 +222,7 @@ empty!(obj::InterfaceList) = begin
     return obj
 end
 
-# Make interface lists and camera lists iterable.
+# Make interface lists, camera lists and mode maps iterable.
 function iterate(itr::Union{InterfaceList,CameraList,NodeMap},
                  state::NTuple{2,Int} = (1, length(itr)))
     idx, len = state
@@ -247,17 +257,56 @@ getproperty(obj::Interface, ::Val{:cameras}) = CameraList(obj)
 # LISTS OF CAMERAS
 
 """
-    lst = SpinnakerCameras.CameraList(sys)
-    lst = SpinnakerCameras.CameraList(int)
+    lst = SpinnakerCameras.CameraList(sys[, updateinterfaces, updatecameras])
+    lst = SpinnakerCameras.CameraList(int[, updatecameras])
 
 yield a list of Spinnaker cameras for the system `sys` or for the interface
 `int`.   This is the same as `sys.cameras` and `int.cameras` respectively.
+Optional arguments `updateinterfaces` and `updatecameras` specify whether
+to update the list of interfaces and the list of cameras respectively.
 
 Call `length(lst)` to retrieve the number of cameras and use syntax `lst[i]` to
 get the `i`-th camera or `lst[ser]` to retrieve a camera by its serial number
 `ser` (a string).
 
 """ CameraList
+
+# The following constructors create an empty camera list, then retrieve the
+# camera list from the system instance.
+function CameraList(system::System)
+    cameralist = CameraList(system, nothing)
+    @checked_call(:spinSystemGetCameras,
+                  (SystemHandle, CameraListHandle),
+                  handle(system), handle(cameralist))
+    return cameralist
+end
+function CameraList(system::System,
+                    updateinterfaces::Bool,
+                    updatecameras::Bool)
+    cameralist = CameraList(system, nothing)
+    @checked_call(:spinSystemGetCamerasEx,
+                  (SystemHandle, SpinBool, SpinBool, CameraListHandle),
+                  handle(system), updateinterfaces, updatecameras,
+                  handle(cameralist))
+    return cameralist
+end
+
+# The following constructors create an empty camera list, then retrieve the
+# camera list from the system instance.
+function CameraList(interface::Interface)
+    cameralist = CameraList(parent(check(interface)), nothing)
+    @checked_call(:spinInterfaceGetCameras,
+                  (InterfaceHandle, CameraListHandle),
+                  handle(interface), handle(cameralist))
+    return cameralist
+end
+function CameraList(interface::Interface, updatecameras::Bool)
+    cameralist = CameraList(parent(check(interface)), nothing)
+    @checked_call(:spinInterfaceGetCamerasEx,
+                  (InterfaceHandle, SpinBool, CameraListHandle),
+                  handle(interface), updatecameras, handle(cameralist))
+    return cameralist
+end
 
 getindex(lst::CameraList, idx::Union{Integer,AbstractString}) = Camera(lst, idx)
 
