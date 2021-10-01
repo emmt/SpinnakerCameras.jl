@@ -25,5 +25,6 @@ include("types.jl")
 include("errors.jl")
 include("methods.jl")
 include("images.jl")
+include("acquisitions.jl")
 
 end # module

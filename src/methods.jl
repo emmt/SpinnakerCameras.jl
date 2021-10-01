@@ -79,7 +79,7 @@ function _finalize(func::Function, obj::SpinObject)
     end
     return nothing
 end
-
+# Function Generation
 # Get length/size of some Spinnaker objects.
 # FIXME: spinNodeMapGetNumNodes seems broken
 for (jl_func, type, c_func) in (
@@ -107,8 +107,8 @@ end
 getproperty(obj::SpinObject, sym::Symbol) = getproperty(obj, Val(sym))
 setproperty!(obj::SpinObject, sym::Symbol, val) =
     setproperty!(obj, Val(sym), val)
-#
-# The following metgods are to deal with errors.
+
+# The following methods are to deal with errors.
 getproperty(obj::T, ::Val{M}) where {T<:SpinObject,M} =
     throw_unknown_field(T, M)
 
@@ -186,9 +186,10 @@ Call `length(lst)` to retrieve the number of interfaces and use syntax `lst[i]`
 to get the `i`-th interface.
 
 """ InterfaceList
-
+# get interface from an index
 getindex(lst::InterfaceList, i::Integer) = Interface(lst, i)
 
+# clear interfaces in the list
 empty!(obj::InterfaceList) = begin
     @checked_call(:spinInterfaceListClear, (InterfaceListHandle,), handle(obj))
     return obj
@@ -252,9 +253,10 @@ Call `length(lst)` to retrieve the number of cameras and use syntax `lst[i]` to
 get the `i`-th camera.
 
 """ CameraList
-
+# get camera from an index
 getindex(lst::CameraList, i::Integer) = Camera(lst, i)
 
+# clear camera list
 empty!(obj::CameraList) = begin
     @checked_call(:spinCameraListClear, (CameraListHandle,), handle(obj))
     return obj
@@ -295,6 +297,7 @@ initializes Spinnaker camera `cam`.
 deinitializes Spinnaker camera `cam`.
 
 """ deinitialize
+
 
 """
     SpinnakerCameras.start(cam)
@@ -364,7 +367,7 @@ function _finalize(obj::Camera)
         _deinitialize(ptr)
     end
     if !isnull(ptr)
-        _clear_handle!(cam)
+        _clear_handle!(obj)
         @checked_call(:spinCameraRelease, (CameraHandle,), ptr)
     end
     return nothing
@@ -388,10 +391,11 @@ for (T, key, func) in (
         end
     end
 end
-
+# get the parent node/ root node
 parent(obj::NodeMap) = getfield(obj, :parent)
 parent(obj::Node) = getfield(obj, :parent)
 
+# get the node eother by numerical index or
 getindex(obj::NodeMap, idx::Integer) = Node(obj, idx)
 getindex(obj::NodeMap, str::AbstractString) = Node(obj, str)
 
@@ -400,6 +404,12 @@ show(io::IO, ::MIME"text/plain", obj::NodeMap) =
 
 show(io::IO, ::MIME"text/plain", obj::Node) =
     print(io, "SpinnakerCameras.Node: name = \"", obj.name, "\"")
+
+#-------------------------------------
+#===
+        Getter functions
+        Numeric nodes
+===#
 
 """
     SpinnakerCameras.getvalue(T, node[, verif])
@@ -475,6 +485,36 @@ for func in (:getvalue, :getmin, :getmax, :getinc)
     end
 end
 
+#===
+        Setter functions
+        Numeric nodes
+===#
+
+
+"""
+    SpinnakerCameras.setvalue(node, value)
+
+sets the value of a Spinnaker node.  Argument node is the numeric node to be set.
+Argument value is the value to be set
+
+""" setvalue
+
+setvalue(node::Node, value::Int64) = @checked_call(:spinEnumerationSetIntValue,
+                                                    (NodeHandle, Int64),
+                                                    handle(node), value)
+
+
+
+#-------------------------------------------------------------------------------
+#====
+    Node additional functions
+    - status checking
+    - property query
+    - Enum Entry Node
+    - Finalizer
+===#
+
+# ================== status checking ====================
 """
     SpinnakerCameras.isavailable(nd)
 
@@ -514,7 +554,7 @@ for (jl_func, c_func) in ((:isavailable,   :spinNodeIsAvailable),
             isnull(ptr) && return false
             ref = Ref{SpinBool}(false)
             @checked_call($c_func, (NodeHandle, Ptr{SpinBool}),
-                          handle(node), ref)
+                          handle(ptr), ref)
             return to_bool(ref[])
         end
     end
@@ -528,7 +568,9 @@ function _isequal(a::NodeHandle, b::NodeHandle)
                   (NodeHandle, NodeHandle, Ptr{SpinBool}), a, b, ref)
     return to_bool(ref[])
 end
+# ============== getproperty for Nodes ======================
 
+# node properties
 propertynames(::Node) = (
     :accessmode,
     :name,
@@ -540,19 +582,21 @@ propertynames(::Node) = (
     :type,
     :pollingtime)
 
+
 # Implement `getproperty` for node objects.  Note that a node handle may be
 # NULL (see comments about calling `spinNodeMapGetNodeByIndex`), so a default
 # value is provided in that case.
 for (sym, func, T, def) in (
-    (:accessmode,  :spinNodeGetAccessMode,  AccessMode,  UndefinedAccesMode),
-    (:name,        :spinNodeGetName,        Cstring,     ""),
-    (:cachingmode, :spinNodeGetCachingMode, CachingMode, UndefinedCachingMode),
-    (:namespace,   :spinNodeGetNameSpace,   NameSpace,   UndefinedNameSpace),
-    (:visibility,  :spinNodeGetVisibility,  Visibility,  UndefinedVisibility),
-    (:tooltip,     :spinNodeGetToolTip,     Cstring,     ""),
-    (:displayname, :spinNodeGetDisplayName, Cstring,     ""),
-    (:type,        :spinNodeGetType,        NodeType,    UnknownNode),
-    (:pollingtime, :spinNodeGetPollingTime, Int64,       0))
+    (:accessmode,  :spinNodeGetAccessMode,             AccessMode,  UndefinedAccesMode),
+    (:name,        :spinNodeGetName,                   Cstring,     ""),
+    (:cachingmode, :spinNodeGetCachingMode,            CachingMode, UndefinedCachingMode),
+    (:namespace,   :spinNodeGetNameSpace,              NameSpace,   UndefinedNameSpace),
+    (:visibility,  :spinNodeGetVisibility,             Visibility,  UndefinedVisibility),
+    (:tooltip,     :spinNodeGetToolTip,                Cstring,     ""),
+    (:displayname, :spinNodeGetDisplayName,            Cstring,     ""),
+    (:type,        :spinNodeGetType,                   NodeType,    UnknownNode),
+    (:pollingtime, :spinNodeGetPollingTime,            Int64,       0)
+    )
     if T === Cstring
         @eval function getproperty(obj::Node, ::$(Val{sym}))
             isnull(handle(obj)) && return $def
@@ -582,12 +626,49 @@ for (sym, func, T, def) in (
     end
 end
 
-function _finalize(obj::Node)
+# ==================  EnumEntryNode ========================
+
+"""
+    SpinnakerCameras.getEntryValue(entryNode) -> Int64
+
+get enum value from enum entry node and return as Integer
+
+""" getEntryValue
+
+function getEntryValue(obj::EntryNode)
+    ref = Ref{Int64}(0)
+    @checked_call(:spinEnumerationEntryGetIntValue,
+                    (NodeHandle, Ptr{Int64}),
+                    handle(obj), ref)
+    return ref[]
+
+end
+
+# ============    Nodemap/ Node Finalizer ======================
+
+# nodemap finzalizer
+function _finalize(obj::NodeMap)
     ptr = handle(obj)
     if !isnull(ptr)
         _clear_handle!(obj)
         @checked_call(:spinNodeMapReleaseNode,
                       (NodeMapHandle, NodeHandle),
+                      handle(parent(obj)), ptr)
+    end
+    return nothing
+end
+
+# entry node finzalizer
+function _finalize(obj::EntryNode)
+    # # check node enumentry type
+    # if getproperty(obj,Val(:type)) != EnumEntryNode
+    #     return throw(TypeError(obj,"Wrong node type..", EnumEntryNode)
+    # end
+    ptr = handle(obj)
+    if !isnull(ptr)
+        _clear_handle!(obj)
+        @checked_call(:spinEnumerationReleaseNode,
+                      (NodeHandle, NodeHandle),
                       handle(parent(obj)), ptr)
     end
     return nothing

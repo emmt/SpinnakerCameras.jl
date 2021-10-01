@@ -178,6 +178,8 @@ end
 mutable struct Node <: SpinObject
     handle::NodeHandle
     parent::NodeMap # needed to maintain a reference to the parent node map instance
+
+    # get node by nodename
     function Node(nodemap::NodeMap, str::AbstractString)
         check(parent(nodemap))
         ref = Ref{NodeHandle}(0)
@@ -186,6 +188,7 @@ mutable struct Node <: SpinObject
                       handle(nodemap), str, ref)
         return finalizer(_finalize, new(ref[], nodemap))
     end
+
     function Node(nodemap::NodeMap, i::Integer)
         # Retrieving the length of the node map costs some time, but the error
         # returned by spinNodeMapGetNodeByIndex when the index is invalid is
@@ -211,6 +214,37 @@ mutable struct Node <: SpinObject
         inbounds || error(
             "out of bounds index in Spinnaker ", shortname(nodemap))
         return finalizer(_finalize, new(ref[], nodemap))
+    end
+
+
+end
+
+# Enumeration node get entry by either index or string name
+# use spinEnumerationRelease API to destroy the entry node
+mutable struct EntryNode <: SpinObject
+    # fields
+    handle::NodeHandle # entrynode handle
+    parent::Node    # the Enum Node
+
+    # contructors
+    # get entry node by name
+    function EntryNode(enumnode::Node, entryName::AbstractString)
+        check(parent(enumnode))
+        ref = Ref{NodeHandle}(0)
+        @checked_call(:spinEnumerationGetEntryByName,
+                    (NodeHandle, Cstring, Ptr{NodeHandle}),
+                    handle(enumnode), entryName, ref)
+        return finalizer(_finalize, new(ref[], enumnode))
+    end
+
+    # get entry node by index
+    function EntryNode(enumnode::Node, index::Csize_t)
+        check(parent(enumnode))
+        ref = Ref{NodeHandle}(0)
+        @checked_call(:spinEnumerationGetEntryByIndex,
+                    (NodeHandle, Csize_t, Ptr{NodeHandle}),
+                    handle(enumnode), index, ref)
+        return finalizer(_finalize, new(ref[], enumnode))
     end
 end
 

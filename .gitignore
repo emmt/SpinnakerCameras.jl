@@ -1,2 +1,7 @@
 *~
 deps.jl
+
+# ignore image files
+*.jpeg
+*.png
+*.bmp

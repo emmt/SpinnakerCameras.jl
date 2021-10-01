@@ -181,8 +181,29 @@ function getproperty(img::Image, ::Val{:pixelformatname})
     end
 end
 
-#SPINNAKERC_API spinImageSaveFromExt(spinImage hImage, const char* pFilename);
+
+"""
+    SpinnakerCameras.save_image(image, filename)
+
+save the image contained in the handle in the given filename
+
+""" save_image
+save_image(image::Image, fname::AbstractString)= @checked_call(:spinImageSaveFromExt,
+                                                    (ImageHandle, Cstring),
+                                                    handle(image), fname)
 
 #SPINNAKERC_API spinImageIsIncomplete(spinImage hImage, bool8_t* pbIsIncomplete);
 #(:tlpayloadtype, :spinImageGetTLPayloadType, spinPayloadTypeInfoIDs*),
 #(:status, :spinImageGetStatus, spinImageStatus*),
+"""
+    SpinnakerCameras.image_incomplete(image) -> bool
+
+
+""" image_incomplete
+function image_incomplete(image::Image)
+    ref = Ref{SpinBool}(false)
+    @checked_call(:spinImageIsIncomplete,(ImageHandle, Ptr{SpinBool}),
+                handle(image), ref)
+
+    return to_bool(ref[])
+end
