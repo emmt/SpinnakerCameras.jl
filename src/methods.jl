@@ -563,18 +563,20 @@ for (jl_func, c_func) in ((:isavailable,   :spinNodeIsAvailable),
                           (:iswritable,    :spinNodeIsWritable),)
     _jl_func = Symbol("_", jl_func)
     @eval begin
-        $jl_func(obj::Node) = $_jl_func(handle(obj))
-        function $_jl_func(ptr::NodeHandle)
-            isnull(ptr) && return false
+
+        function $_jl_func(obj::Node)
+            isnull(handle(obj)) && return false
             ref = Ref{SpinBool}(false)
             @checked_call($c_func, (NodeHandle, Ptr{SpinBool}),
                           handle(obj), ref)
             return to_bool(ref[])
         end
+
+        $jl_func(obj::Node) = $_jl_func(obj)
     end
 end
 
-isequal(a::Node, b::Node) = _isequal(ghandle(a), handle(b))
+isequal(a::Node, b::Node) = _isequal(handle(a), handle(b))
 function _isequal(a::NodeHandle, b::NodeHandle)
     (isnull(a) || isnull(b)) && return false
     ref = Ref{SpinBool}(false)

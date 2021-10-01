@@ -25,8 +25,8 @@ function setAcquisitionmode(obj::NodeMap, mode_str::AbstractString)
    acquisitionModeNode = getindex(obj, "AcquisitionMode")
 
    # check availability and readability
-   # isavailable(handle(acquisitionModeNode))
-   # isreadable(handle(acquisitionModeNode))
+   isavailable(acquisitionModeNode)
+   isreadable(acquisitionModeNode)
 
    # get entry node
    acquisitionModeEntryNode = EntryNode(acquisitionModeNode, mode_str)
@@ -35,8 +35,8 @@ function setAcquisitionmode(obj::NodeMap, mode_str::AbstractString)
    mode_num = getEntryValue(acquisitionModeEntryNode)
 
    # set the acquisitionmode node
-   # isavailable(acquisitionModeNode)
-   # iswritable(acquisitionModeNode)
+   isavailable(acquisitionModeNode)
+   iswritable(acquisitionModeNode)
 
    setEnumValue(acquisitionModeNode, mode_num)
 
@@ -101,14 +101,24 @@ end
 function configure_exposure(camNodeMap::NodeMap, exposure_time::Float64)
    # turn off automatic exposure time
    exposureAutoNode = getindex(camNodeMap,"ExposureAuto")
+   isavailable(exposureAutoNode)
+   isreadable(exposureAutoNode)
    exposureOffNode = EntryNode(exposureAutoNode, "Off")
    exposureOffInt = getEntryValue(exposureOffNode)
+
+   isavailable(exposureAutoNode)
+   iswritable(exposureAutoNode)
    setEnumValue(exposureAutoNode, exposureOffInt)
 
    # check maximum exposure time
    exposureTimeNode = getindex(camNodeMap,"ExposureTime")
+   isavailable(exposureTimeNode)
+   isreadable(exposureTimeNode)
    exposureMax = getmax(Float64, exposureTimeNode)
    exposure_time > exposureMax ? exposure_time = exposureMax : nothing
+
+   isavailable(exposureTimeNode)
+   iswritable(exposureTimeNode)
    setValue(exposureTimeNode, exposure_time)
 
 
@@ -123,8 +133,13 @@ end
 function reset_exposure(camNodeMap::NodeMap)
    # turn off automatic exposure time
    exposureAutoNode = getindex(camNodeMap,"ExposureAuto")
+   isavailable(exposureAutoNode)
+   isreadable(exposureAutoNode)
    exposureOnNode = EntryNode(exposureAutoNode, "Continuous")
    exposureOnInt = getEntryValue(exposureOnNode)
+
+   isavailable(exposureAutoNode)
+   iswritable(exposureAutoNode)
    setEnumValue(exposureAutoNode, exposureOnInt)
 
 end

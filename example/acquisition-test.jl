@@ -29,6 +29,9 @@ camera = camList[1]
 SpinnakerCameras.initialize(camera)
 camNodeMap = SpinnakerCameras.getproperty(camera, Val(:nodemap))
 
+
+# isreadable(handle(acquisitionModeNode))
+
 print("Set acquisition mode to $modeStr ... \n")
 
 SpinnakerCameras.setAcquisitionmode(camNodeMap, modeStr)
