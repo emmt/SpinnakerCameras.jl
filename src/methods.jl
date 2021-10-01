@@ -454,7 +454,7 @@ for (jl_func, type, c_func) in (
     (:getinc,   Int64,   :spinIntegerGeInc),
     (:getvalue, Cdouble, :spinFloatGetValue),
     (:getmin,   Cdouble, :spinFloatGetMin),
-    (:getmax,   Cdouble, :spinFloatGetMAx),)
+    (:getmax,   Cdouble, :spinFloatGetMax),)
     @eval function $jl_func(::Type{$type}, node::Node)
         ref = Ref{$type}(0)
         @checked_call($c_func, (NodeHandle, Ptr{$type}), handle(node), ref)
@@ -490,20 +490,34 @@ end
         Numeric nodes
 ===#
 
-
 """
-    SpinnakerCameras.setvalue(node, value)
+    SpinnakerCameras.setValue(node, value)
 
 sets the value of a Spinnaker node.  Argument node is the numeric node to be set.
 Argument value is the value to be set
 
-""" setvalue
+""" setValue
 
-setvalue(node::Node, value::Int64) = @checked_call(:spinEnumerationSetIntValue,
-                                                    (NodeHandle, Int64),
+setValue(node::Node, value::Float64) = @checked_call(:spinFloatSetValue,
+                                                    (NodeHandle, Cdouble),
+                                                    handle(node), value)
+
+setValue(node::Node, value::Int64) = @checked_call(:spinIntegerSetValue,
+                                                    (NodeHandle, Cint),
                                                     handle(node), value)
 
 
+"""
+    SpinnakerCameras.setEnumValue(node, value)
+
+sets the value of a enum node.  Argument node is the numeric node to be set.
+Argument value is the value to be set
+
+""" seEnumtValue
+
+setEnumValue(node::Node, value::Int64) = @checked_call(:spinEnumerationSetIntValue,
+                                                    (NodeHandle, Cint),
+                                                    handle(node), value)
 
 #-------------------------------------------------------------------------------
 #====
@@ -554,7 +568,7 @@ for (jl_func, c_func) in ((:isavailable,   :spinNodeIsAvailable),
             isnull(ptr) && return false
             ref = Ref{SpinBool}(false)
             @checked_call($c_func, (NodeHandle, Ptr{SpinBool}),
-                          handle(ptr), ref)
+                          handle(obj), ref)
             return to_bool(ref[])
         end
     end
