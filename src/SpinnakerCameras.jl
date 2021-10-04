@@ -20,7 +20,7 @@ import Base:
     getindex, setindex!,
     getproperty, setproperty!, propertynames
 
-import Printf
+using Printf
 
 include("macros.jl")
 include("types.jl")
