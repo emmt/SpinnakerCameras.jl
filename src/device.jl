@@ -11,11 +11,30 @@
 #===========
 Reset
 =========#
+"""
+    SpinnakerCameras.reset()
+"""
 function reset(camera::Camera)
-    _camNodemape =  getproperty(camera, Val(:nodemap))
-    deviceResetNode = getindex(_camNodemape, "DeviceReset")
+    _camNodemape = camera.nodemap
+    deviceResetNode = camNodemape["DeviceReset"]
     command_execute(deviceResetNode)
     print("Camera is reset... \n")
-    return nothing
+    return finalize(_camNodemape)
+end
 
+#============
+
+
+===========#
+
+function device_temperature(camera::Camera)
+    _camNodemape =  camera.nodemap
+    deviceTemperatureNode = _camNodemape["DeviceTemperature"]
+    isavailable(deviceTemperatureNode)
+    isreadable(deviceTemperatureNode)
+
+    temperature =  getvalue(Cdouble, deviceTemperatureNode, true)
+    finalize(_camNodemape)
+
+    return  temperature
 end

@@ -28,18 +28,17 @@ print("Starting a camera....\n\n")
 
 camera = camList[1]
 SpinnakerCameras.initialize(camera)
-camNodeMap = SpinnakerCameras.getproperty(camera, Val(:nodemap))
 
 
 # isreadable(handle(acquisitionModeNode))
 
 print("Set acquisition mode to $modeStr ... \n")
 
-SpinnakerCameras.setAcquisitionmode(camNodeMap, modeStr)
+SpinnakerCameras.setAcquisitionmode(camera, modeStr)
 
 # set exposure
 print("Set exposure time to $exposure_time\n")
-SpinnakerCameras.configure_exposure(camNodeMap, exposure_time)
+SpinnakerCameras.configure_exposure(camera, exposure_time)
 
 
 # acquire image
@@ -47,7 +46,7 @@ print("Acquiring images ..\n")
 fname = "SpinnakerCameras_image"
 SpinnakerCameras.acquire_n_save_images(camera, numImg, fname, imageFormat)
 
-SpinnakerCameras.reset_exposure(camNodeMap)
+SpinnakerCameras.reset_exposure(camera)
 SpinnakerCameras.deinitialize(camera)
 
 # finalize the objects

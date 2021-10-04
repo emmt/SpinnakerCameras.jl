@@ -20,9 +20,11 @@ TODO: add acquisition control functionalities
 """ setAcquisitionmode
 
 
-function setAcquisitionmode(obj::NodeMap, mode_str::AbstractString)
+function setAcquisitionmode(camera::Camera, mode_str::AbstractString)
+
+    _camNodemape = camera.nodemap
    # get acquisition node
-   acquisitionModeNode = getindex(obj, "AcquisitionMode")
+   acquisitionModeNode = _camNodemape["AcquisitionMode"]
 
    # check availability and readability
    isavailable(acquisitionModeNode)
@@ -40,12 +42,12 @@ function setAcquisitionmode(obj::NodeMap, mode_str::AbstractString)
 
    setEnumValue(acquisitionModeNode, mode_num)
 
-   # print("Successfully set acquisition mode ... \n")
+   return  finalize(_camNodemape)
 
 end
 
 """
-   SpinnakerCameras.acquire_n_save_images(camear, numImg, fname, fileformat)
+   SpinnakerCameras.acquire_n_save_images(camera, numImg, fname, fileformat)
 
    acquire images of which number is specified by numImg and save the images
    in the format given by imageFormat; eg. ".jpeg". The fname is the base name of the images.
@@ -86,6 +88,12 @@ function acquire_n_save_images(camera::Camera, numImg::Int64, fname::String, ima
    SpinnakerCameras.stop(camera)
 end
 
+
+"""
+    SpinnakerCameras.acquire_image(camera, image)
+start image acquiring thread and run in the back ground. Constantly return
+image pointer.
+"""
 #---
 #==========
 
@@ -98,9 +106,11 @@ end
 
 """ configure_exposure
 
-function configure_exposure(camNodeMap::NodeMap, exposure_time::Float64)
+function configure_exposure(camera::Camera, exposure_time::Float64)
+    _camNodemape = camera.nodemap
+
    # turn off automatic exposure time
-   exposureAutoNode = getindex(camNodeMap,"ExposureAuto")
+   exposureAutoNode = _camNodemape["ExposureAuto"]
    isavailable(exposureAutoNode)
    isreadable(exposureAutoNode)
    exposureOffNode = EntryNode(exposureAutoNode, "Off")
@@ -111,7 +121,7 @@ function configure_exposure(camNodeMap::NodeMap, exposure_time::Float64)
    setEnumValue(exposureAutoNode, exposureOffInt)
 
    # check maximum exposure time
-   exposureTimeNode = getindex(camNodeMap,"ExposureTime")
+   exposureTimeNode = _camNodemape["ExposureTime"]
    isavailable(exposureTimeNode)
    isreadable(exposureTimeNode)
    exposureMax = getmax(Float64, exposureTimeNode)
@@ -121,7 +131,7 @@ function configure_exposure(camNodeMap::NodeMap, exposure_time::Float64)
    iswritable(exposureTimeNode)
    setValue(exposureTimeNode, exposure_time)
 
-
+   return finalize(_camNodemape)
 end
 
 """
@@ -130,9 +140,11 @@ end
 
 """ reset_exposure
 
-function reset_exposure(camNodeMap::NodeMap)
+function reset_exposure(camera::Camera)
+    _camNodemape =  camera.nodemap
+
    # turn off automatic exposure time
-   exposureAutoNode = getindex(camNodeMap,"ExposureAuto")
+   exposureAutoNode = _camNodemape["ExposureAuto"]
    isavailable(exposureAutoNode)
    isreadable(exposureAutoNode)
    exposureOnNode = EntryNode(exposureAutoNode, "Continuous")
@@ -141,5 +153,5 @@ function reset_exposure(camNodeMap::NodeMap)
    isavailable(exposureAutoNode)
    iswritable(exposureAutoNode)
    setEnumValue(exposureAutoNode, exposureOnInt)
-
+    return finalize(_camNodemape)
 end

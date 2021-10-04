@@ -110,6 +110,9 @@ getproperty(img::Image, sym::Symbol) = getproperty(img, Val(sym))
 setproperty!(img::Image, sym::Symbol, val) =
     error("members of Spinnaker ", shortname(img), " are read-only")
 
+
+# Getter functions
+# propertiy table
 propertynames(::Image) = (
     :bitsperpixel,
     :buffersize,
@@ -131,6 +134,7 @@ propertynames(::Image) = (
     :validpayloadsize,
     :width)
 
+#dispatch
 for (sym, func, type) in (
     (:bitsperpixel,     :spinImageGetBitsPerPixel,     Csize_t),
     (:buffersize,       :spinImageGetBufferSize,       Csize_t),
@@ -163,15 +167,15 @@ end
 
 function getproperty(img::Image, ::Val{:pixelformatname})
     # FIXME: first call with NULL buffer to get the size.
-    buf = Vector{UInt8}(undef, 32)
-    siz = Ref{Csize_t}(0)
+    buff = Vector{UInt8}(undef, 32)
+    size = Ref{Csize_t}(0)
     while true
-        siz[] = length(buf)
+        size[] = length(buff)
         err = @unchecked_call(:spinImageGetPixelFormatName,
                               (ImageHandle, Ptr{UInt8}, Ptr{Csize_t}),
-                              handle(img), buf, siz)
+                              handle(img), bufferf, size)
         if err == SPINNAKER_ERR_SUCCESS
-            return String(resize!(buf, siz[] - 1))
+            return String(resize!(buff, size[] - 1))
         elseif err == SPINNAKER_ERR_INVALID_BUFFER
             # Double the buffer size.
             resize!(buf, 2*length(buf))
@@ -180,6 +184,24 @@ function getproperty(img::Image, ::Val{:pixelformatname})
         end
     end
 end
+
+
+ #====
+
+ ImageFormatControl node
+
+ ===#
+
+ # Sensor properties
+
+
+
+
+
+
+
+
+
 
 
 """
