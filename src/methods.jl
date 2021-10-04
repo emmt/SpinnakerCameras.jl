@@ -513,7 +513,7 @@ setValue(node::Node, value::Int64) = @checked_call(:spinIntegerSetValue,
 sets the value of a enum node.  Argument node is the numeric node to be set.
 Argument value is the value to be set
 
-""" seEnumtValue
+""" setEnumtValue
 
 setEnumValue(node::Node, value::Int64) = @checked_call(:spinEnumerationSetIntValue,
                                                     (NodeHandle, Cint),
@@ -522,11 +522,23 @@ setEnumValue(node::Node, value::Int64) = @checked_call(:spinEnumerationSetIntVal
 #-------------------------------------------------------------------------------
 #====
     Node additional functions
+    - commandNode execute
     - status checking
     - property query
     - Enum Entry Node
     - Finalizer
 ===#
+
+# ================== command node execute ====================
+"""
+    SpinnakerCameras.command_execute(nd)
+
+execute a command node
+
+""" command_execute
+
+command_execute(node::Node) = @checked_call(:spinCommandExecute,
+                                             (NodeHandle,), handle(node))
 
 # ================== status checking ====================
 """
