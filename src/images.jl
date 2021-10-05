@@ -8,6 +8,8 @@
 const PixelFormat_Mono8 = Cenum(0)
 const PixelFormat_Mono16 = Cenum(1)
 
+
+
 function _finalize(obj::Image)
     ptr = handle(obj)
     if !isnull(ptr)
@@ -112,7 +114,7 @@ setproperty!(img::Image, sym::Symbol, val) =
 
 
 # Getter functions
-# propertiy table
+# property table
 propertynames(::Image) = (
     :bitsperpixel,
     :buffersize,
@@ -132,7 +134,9 @@ propertynames(::Image) = (
     :stride,
     :timestamp,
     :validpayloadsize,
-    :width)
+    :width,
+    :completeness
+    :status)
 
 #dispatch
 for (sym, func, type) in (
@@ -156,7 +160,9 @@ for (sym, func, type) in (
     (:tlpixelformat,    :spinImageGetTLPixelFormat,    UInt64),
 
     (:validpayloadsize, :spinImageGetValidPayloadSize, Csize_t),
-    (:width,            :spinImageGetWidth,            Csize_t),)
+    (:width,            :spinImageGetWidth,            Csize_t),
+    (:incomplete,       :spinImageIsIncomplete,        SpinBool),
+    (:status,           :spinImageGetStatus,           ImageStatus))
 
     @eval function getproperty(img::Image, ::$(Val{sym}))
         ref = Ref{$type}(0)
@@ -213,19 +219,3 @@ save the image contained in the handle in the given filename
 save_image(image::Image, fname::AbstractString)= @checked_call(:spinImageSaveFromExt,
                                                     (ImageHandle, Cstring),
                                                     handle(image), fname)
-
-#SPINNAKERC_API spinImageIsIncomplete(spinImage hImage, bool8_t* pbIsIncomplete);
-#(:tlpayloadtype, :spinImageGetTLPayloadType, spinPayloadTypeInfoIDs*),
-#(:status, :spinImageGetStatus, spinImageStatus*),
-"""
-    SpinnakerCameras.image_incomplete(image) -> bool
-
-
-""" image_incomplete
-function image_incomplete(image::Image)
-    ref = Ref{SpinBool}(false)
-    @checked_call(:spinImageIsIncomplete,(ImageHandle, Ptr{SpinBool}),
-                handle(image), ref)
-
-    return to_bool(ref[])
-end

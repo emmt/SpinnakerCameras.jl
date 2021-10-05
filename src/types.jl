@@ -342,3 +342,6 @@ mutable struct Image <: SpinObject
         finalizer(_finalize, new(handle, created))
     Image() = Image(ImageHandle(0), false)
 end
+
+# Julia ImageStaus type
+const ImageStatus = Cenum

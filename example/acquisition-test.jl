@@ -29,9 +29,6 @@ print("Starting a camera....\n\n")
 camera = camList[1]
 SpinnakerCameras.initialize(camera)
 
-
-# isreadable(handle(acquisitionModeNode))
-
 print("Set acquisition mode to $modeStr ... \n")
 
 SpinnakerCameras.setAcquisitionmode(camera, modeStr)

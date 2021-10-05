@@ -54,9 +54,10 @@ end
    The file name is tagged by the order of the imaging. Timeout can be specified
 """ acquire_n_save_images
 
-function acquire_n_save_images(camera::Camera, numImg::Int64, fname::String, imageFormat::String; timeoutSec::Int64 = 1)
+function acquire_n_save_images(camera::Camera, numImg::Int64, fname::String,
+                            imageFormat::String; timeoutSec::Int64 = 1)
    #Begin acquisition
-   SpinnakerCameras.start(camera)
+   start(camera)
 
    # retreive, convert, and save images
    for ind in 1:numImg
@@ -71,8 +72,12 @@ function acquire_n_save_images(camera::Camera, numImg::Int64, fname::String, ima
            nothing
        end
        # check image completeness
-       if SpinnakerCameras.image_incomplete(img)
+       if  img.incomplete == 1
            print("Image $ind is incomplete.. skipepd \n")
+           finalize(img)
+
+       elseif img.status != 0
+           print("Image $ind has error.. skipepd \n")
            finalize(img)
 
        else

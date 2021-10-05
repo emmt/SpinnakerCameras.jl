@@ -42,7 +42,9 @@ for prop in (   :bitsperpixel,
                 :tlpixelformat,
                 :validpayloadsize,
                 :width,
-                :height           )
+                :height,
+                :incomplete,
+                :status           )
 
         output = getproperty(image,prop)
         print("$prop = $output \n")
