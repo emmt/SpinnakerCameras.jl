@@ -65,4 +65,10 @@ end
     @test all(x -> isa(x, SpinnakerCameras.Camera), sys.cameras)
 end
 
+@testset "SharedObject" begin
+    @test isdefined(SpinnakerCameras, :SharedObject)
+    @test isdefined(SpinnakerCameras, :SharedArray)
+end
+
+
 end # module

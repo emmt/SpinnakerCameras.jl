@@ -57,7 +57,7 @@ end
 function acquire_n_save_images(camera::Camera, numImg::Int64, fname::String,
                             imageFormat::String; timeoutSec::Int64 = 1)
    #Begin acquisition
-   start(camera)
+   SpinnakerCameras.start(camera)
 
    # retreive, convert, and save images
    for ind in 1:numImg
@@ -95,10 +95,64 @@ end
 
 
 """
-    SpinnakerCameras.acquire_image(camera, image)
-start image acquiring thread and run in the back ground. Constantly return
-image pointer.
+    SpinnakerCameras.acquire_n_share_image(camera, shared_array)
+
 """
+
+#===
+    1. acquire the next image
+    2. check writability of the shared array
+    3. lock the shared array
+    4. copy the image into the shared_array
+    5. unlock the shared array
+    6. destroy the image
+===#
+
+
+function acquire_n_share_image(camera::Camera, arr::SharedArray, timeoutSec::Int64 = 1 )
+    #Begin acquisition
+    SpinnakerCameras.start(camera)
+
+    # retreive, post images
+
+    img =
+    try
+        SpinnakerCameras.next_image(camera, timeoutSec)
+    catch ex
+        if (!isa(ex, SpinnakerCameras.CallError) ||
+            ex.code != SpinnakerCameras.SPINNAKER_ERR_TIMEOUT)
+            rethrow(ex)
+        end
+        nothing
+    end
+
+    # check image completeness
+    if  img.incomplete == 1
+        print("Image $ind is incomplete.. skipepd \n")
+        finalize(img)
+    elseif img.status != 0
+        print("Image $ind has error.. skipepd \n")
+        finalize(img)
+    else
+
+        print("Image size =",img.size,"\n")
+        # copy image content to an array
+        img_data = img.data
+        print("image array size",  size(img_data),"\n")
+        # wait for the array to be available
+        sharrHandle = attach(SharedArray{Float64}, arr.shmid)
+        # copy
+        print("Copy image data .. \n")
+        copyto!(arr, img_data)
+
+        detach(sharrHandle)
+        finalize(img)
+    end
+
+    SpinnakerCameras.stop(camera)
+
+
+end
 #---
 #==========
 

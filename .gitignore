@@ -4,3 +4,11 @@
 *.jpeg
 *.png
 *.bmp
+
+#manifest
+
+Manifest.toml
+
+#deps
+deps.jl
+gendeps*

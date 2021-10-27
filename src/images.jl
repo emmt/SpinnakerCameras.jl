@@ -142,7 +142,6 @@ propertynames(::Image) = (
 for (sym, func, type) in (
     (:bitsperpixel,     :spinImageGetBitsPerPixel,     Csize_t),
     (:buffersize,       :spinImageGetBufferSize,       Csize_t),
-    (:data,             :spinImageGetData,             Ptr{Cvoid}),
     (:privatedata,      :spinImageGetPrivateData,      Ptr{Cvoid}),
     (:frameid,          :spinImageGetFrameID,          UInt64),
     (:height,           :spinImageGetHeight,           Csize_t),
@@ -156,19 +155,31 @@ for (sym, func, type) in (
     (:size,             :spinImageGetSize,             Csize_t),
     (:stride,           :spinImageGetStride,           Csize_t),
     (:timestamp,        :spinImageGetTimeStamp,        UInt64),
-
     (:tlpixelformat,    :spinImageGetTLPixelFormat,    UInt64),
-
     (:validpayloadsize, :spinImageGetValidPayloadSize, Csize_t),
     (:width,            :spinImageGetWidth,            Csize_t),
     (:incomplete,       :spinImageIsIncomplete,        SpinBool),
-    (:status,           :spinImageGetStatus,           ImageStatus))
+    (:status,           :spinImageGetStatus,           ImageStatus)
+    )
 
     @eval function getproperty(img::Image, ::$(Val{sym}))
         ref = Ref{$type}(0)
         @checked_call($func, (ImageHandle, Ptr{$type}), handle(img), ref)
         return ref[]
     end
+end
+
+function getproperty(img::Image , ::Val{:data})
+    ref = Ref{Ptr{Cvoid}}(0)
+    @checked_call(:spinImageGetData,(ImageHandle, Ptr{Ptr{Cvoid}}), handle(img), ref)
+    dataPtr = ref[]
+    #image size
+    imgH = convert(Int64,img.height)
+    imgW = convert(Int64,img.width)
+    print("image resolution = ",(imgH, imgW), "\n")
+    dataArr = unsafe_wrap(Array{Float64,2}, Ptr{Float64}(dataPtr), (imgH,imgW))
+    return dataArr
+
 end
 
 function getproperty(img::Image, ::Val{:pixelformatname})
@@ -179,12 +190,12 @@ function getproperty(img::Image, ::Val{:pixelformatname})
         size[] = length(buff)
         err = @unchecked_call(:spinImageGetPixelFormatName,
                               (ImageHandle, Ptr{UInt8}, Ptr{Csize_t}),
-                              handle(img), bufferf, size)
+                              handle(img), buff, size)
         if err == SPINNAKER_ERR_SUCCESS
             return String(resize!(buff, size[] - 1))
         elseif err == SPINNAKER_ERR_INVALID_BUFFER
             # Double the buffer size.
-            resize!(buf, 2*length(buf))
+            resize!(buff, 2*length(buff))
         else
             throw(CallError(err, :spinImageGetPixelFormatName))
         end
@@ -215,7 +226,7 @@ end
 
 save the image contained in the handle in the given filename
 
-""" save_image
-save_image(image::Image, fname::AbstractString)= @checked_call(:spinImageSaveFromExt,
-                                                    (ImageHandle, Cstring),
-                                                    handle(image), fname)
+"""# save_image
+# save_image(image::Image, fname::AbstractString)= @checked_call(:spinImageSaveFromExt,
+#                                                     (ImageHandle, Cstring),
+#                                                     handle(image), fname)
