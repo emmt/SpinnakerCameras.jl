@@ -8,7 +8,7 @@
 module SpinnakerCameras
 
 using Printf
-
+using Images
 
 
 

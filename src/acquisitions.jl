@@ -42,7 +42,9 @@ function setAcquisitionmode(camera::Camera, mode_str::AbstractString)
 
    setEnumValue(acquisitionModeNode, mode_num)
 
-   return  finalize(_camNodemape)
+   finalize(acquisitionModeEntryNode)
+   finalize(acquisitionModeNode)
+   finalize(_camNodemape)
 
 end
 
@@ -74,23 +76,25 @@ function acquire_n_save_images(camera::Camera, numImg::Int64, fname::String,
        # check image completeness
        if  img.incomplete == 1
            print("Image $ind is incomplete.. skipepd \n")
-           finalize(img)
+           # finalize(img)
 
        elseif img.status != 0
            print("Image $ind has error.. skipepd \n")
-           finalize(img)
+           # finalize(img)
 
        else
            # save image
            fname_now = Printf.@sprintf "%s_%d%s" fname ind imageFormat
            SpinnakerCameras.save_image(img, fname_now )
            print("Image $ind is complete.. saved as $fname_now \n")
+
            finalize(img)
        end
 
    end
 
    SpinnakerCameras.stop(camera)
+
 end
 
 
@@ -135,20 +139,11 @@ function acquire_n_share_image(camera::Camera, arr::SharedArray, timeoutSec::Int
         finalize(img)
     else
 
-        print("Image size =",img.size,"\n")
-        # copy image content to an array
-        img_data = img.data
-        print("image array size",  size(img_data),"\n")
-        # wait for the array to be available
-        sharrHandle = attach(SharedArray{Float64}, arr.shmid)
-        # copy
-        print("Copy image data .. \n")
+        img_data = @view img.data[:,:]
         copyto!(arr, img_data)
 
-        detach(sharrHandle)
         finalize(img)
     end
-
     SpinnakerCameras.stop(camera)
 
 
@@ -190,7 +185,11 @@ function configure_exposure(camera::Camera, exposure_time::Float64)
    iswritable(exposureTimeNode)
    setValue(exposureTimeNode, exposure_time)
 
-   return finalize(_camNodemape)
+
+   finalize(exposureOffNode)
+   finalize(exposureAutoNode)
+   finalize(_camNodemape)
+
 end
 
 """
@@ -212,5 +211,8 @@ function reset_exposure(camera::Camera)
    isavailable(exposureAutoNode)
    iswritable(exposureAutoNode)
    setEnumValue(exposureAutoNode, exposureOnInt)
-    return finalize(_camNodemape)
+
+   finalize(exposureOnNode)
+   finalize(exposureAutoNode)
+   finalize(_camNodemape)
 end

@@ -19,6 +19,7 @@ function _finalize(obj::Image)
             @checked_call(:spinImageDestroy, (ImageHandle,), ptr)
         else
             @checked_call(:spinImageRelease, (ImageHandle,), ptr)
+            print("Image is released .. \n")
         end
     end
     return nothing
@@ -176,8 +177,8 @@ function getproperty(img::Image , ::Val{:data})
     #image size
     imgH = convert(Int64,img.height)
     imgW = convert(Int64,img.width)
-    print("image resolution = ",(imgH, imgW), "\n")
-    dataArr = unsafe_wrap(Array{Float64,2}, Ptr{Float64}(dataPtr), (imgH,imgW))
+
+    dataArr = unsafe_wrap(Array{UInt8,2}, Ptr{UInt8}(dataPtr), (imgH,imgW))
     return dataArr
 
 end
@@ -226,7 +227,8 @@ end
 
 save the image contained in the handle in the given filename
 
-"""# save_image
-# save_image(image::Image, fname::AbstractString)= @checked_call(:spinImageSaveFromExt,
-#                                                     (ImageHandle, Cstring),
-#                                                     handle(image), fname)
+""" save_image
+
+save_image(image::Image, fname::AbstractString)= @checked_call(:spinImageSaveFromExt,
+                                                    (ImageHandle, Cstring),
+                                                    handle(image), fname)

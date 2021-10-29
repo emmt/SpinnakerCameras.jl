@@ -1,13 +1,14 @@
 using SpinnakerCameras
+using Printf
 using Images
+if pwd() != "/home/evwaco/SpinnakerCameras.jl/example"
+    cd("/home/evwaco/SpinnakerCameras.jl/example")
+end
 # Acquisition params
 modeStr = "SingleFrame"
 
-# Image format params
-imageSize = (500, 350)
-
 # Exposure
-exposure_time = 100.0
+exposure_time = 40.0
 
 
 system = SpinnakerCameras.System()
@@ -40,22 +41,34 @@ SpinnakerCameras.configure_exposure(camera, exposure_time)
     1. create shared array
     2. acquire image
     3. put image into the shared memory
-    4. invoke data reading script --> read and save image
 
 =#
-#
+# params
+numImg = 8
+delay = 5
+
 sharr = SpinnakerCameras.create(SpinnakerCameras.SharedArray{UInt8,2},
     (1536,2048), perms = 0o666)
 
+# save shmid in a text file
+# cd("./example")
+fname = "shmid.txt"
+open(fname,"w") do f
+    write(f,@sprintf("%d", sharr.shmid))
+end
+
 arr = SpinnakerCameras.attach(SpinnakerCameras.SharedArray{UInt8}, sharr.shmid)
 
-while SpinnakerCameras.islocked(arr) end
-SpinnakerCameras.wrlock(arr,1.0) do
-    SpinnakerCameras.acquire_n_share_image(camera, arr)
+# acquisition loop
+for k in 1:numImg
+    SpinnakerCameras.rdlock(arr,10.0) do
+        sleep(delay)
+        println("posting image ", k)
+        SpinnakerCameras.acquire_n_share_image(camera, arr)
+    end
+
 end
-# display the image
-carr = convert(Array{Float16},arr)
-img = colorview(Gray,carr)
+
 
 SpinnakerCameras.detach(arr)
 
@@ -63,4 +76,4 @@ SpinnakerCameras.detach(arr)
 for obj in (:camera, :camList, :system)
     eval(Expr(:call,:finalize, obj))
 end
-print("Example is complete ..\n")
+print("Producer is complete ..\n")

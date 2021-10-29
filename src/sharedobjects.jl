@@ -204,6 +204,7 @@ function _detach(obj::AnySharedObject, throwerrors::Bool)
     if ptr == C_NULL
         _set_lock!(obj, UNLOCKED)
     else
+        
         # Make sure object is unlocked and detach it.
         status = OK
         if obj.lock != UNLOCKED

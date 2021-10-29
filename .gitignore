@@ -6,9 +6,10 @@
 *.bmp
 
 #manifest
-
 Manifest.toml
 
 #deps
 deps.jl
 gendeps*
+
+shmid.txt

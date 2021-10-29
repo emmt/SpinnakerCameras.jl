@@ -74,11 +74,12 @@ end
 function _finalize(func::Function, obj::SpinObject)
     ptr = handle(obj)
     if ! isnull(ptr)
-        _clear_handle!(obj)
         func(ptr)
+        _clear_handle!(obj)
     end
     return nothing
 end
+
 # Function Generation
 # Get length/size of some Spinnaker objects.
 # FIXME: spinNodeMapGetNumNodes seems broken
@@ -142,6 +143,7 @@ are implemented:
 """ System
 
 _finalize(obj::System) = _finalize(obj) do ptr
+    print("Finalize System .. \n")
     @checked_call(:spinSystemReleaseInstance, (SystemHandle,), ptr)
 end
 
@@ -263,6 +265,7 @@ empty!(obj::CameraList) = begin
 end
 
 _finalize(obj::CameraList) = _finalize(obj) do ptr
+    print("Finalize Camera List .. \n")
     err1 = @unchecked_call(:spinCameraListClear,
                            (CameraListHandle,), ptr)
     err2 = @unchecked_call(:spinCameraListDestroy,
@@ -367,8 +370,14 @@ function _finalize(obj::Camera)
         _deinitialize(ptr)
     end
     if !isnull(ptr)
+        print("Finalize Camera ...\n")
+
+        err1 = @unchecked_call(:spinCameraDeInit, (CameraHandle,), ptr)
+        err2 = @unchecked_call(:spinCameraRelease, (CameraHandle,), ptr)
+        _check(err1,:spinCameraDeInit)
+        _check(err2,:spinCameraRelease)
+
         _clear_handle!(obj)
-        @checked_call(:spinCameraRelease, (CameraHandle,), ptr)
     end
     return nothing
 end
@@ -674,30 +683,37 @@ end
 
 # ============    Nodemap/ Node Finalizer ======================
 
-# nodemap finzalizer
+# nodemap finalizer
 function _finalize(obj::NodeMap)
     ptr = handle(obj)
     if !isnull(ptr)
+        print("Finalize Nodemap ...\n")
         _clear_handle!(obj)
-        @checked_call(:spinNodeMapReleaseNode,
-                      (NodeMapHandle, NodeHandle),
-                      handle(parent(obj)), ptr)
+
     end
     return nothing
 end
 
-# entry node finzalizer
-function _finalize(obj::EntryNode)
-    # # check node enumentry type
-    # if getproperty(obj,Val(:type)) != EnumEntryNode
-    #     return throw(TypeError(obj,"Wrong node type..", EnumEntryNode)
-    # end
+# node finalizer
+function _finalize(obj::Node)
     ptr = handle(obj)
     if !isnull(ptr)
+        print("Finalize Node ...\n")
         _clear_handle!(obj)
-        @checked_call(:spinEnumerationReleaseNode,
-                      (NodeHandle, NodeHandle),
-                      handle(parent(obj)), ptr)
+    end
+    return nothing
+end
+
+# entry node finalizer
+function _finalize(obj::EntryNode)
+    ptr = handle(obj)
+    if !isnull(ptr)
+        print("Finalize Entry Node .. \n")
+        # @checked_call(:spinEnumerationReleaseNode,
+        #               (NodeHandle, NodeHandle),
+        #               handle(parent(obj)), ptr)
+         _clear_handle!(obj)
+
     end
     return nothing
 end
