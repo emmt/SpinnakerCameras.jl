@@ -1,4 +1,1 @@
-cc -Wall -Werror -I/home/evwaco/TAO/base -DTAO_DLL=\"/home/evwaco/TAO/base/.libs/libtao.so\" gendeps.c -o gendeps
-rm -f "deps.jl"
-./gendeps >"deps.jl"
-chmod a-w "deps.jl"
+make: Nothing to be done for 'all'.

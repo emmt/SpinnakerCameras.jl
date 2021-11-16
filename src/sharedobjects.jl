@@ -122,6 +122,10 @@ _fix_shared_object_type(type::Signed) :: UInt32 =
 _fix_shared_object_type(type::Unsigned) :: UInt32 =
     _fix_shared_object_type(convert(UInt32, type))
 
+"""
+
+
+"""
 function create(::Type{SharedObject}, type::Integer, size::Integer;
                 owner::AbstractString = default_owner(),
                 perms::Integer = 0o600)
@@ -204,7 +208,7 @@ function _detach(obj::AnySharedObject, throwerrors::Bool)
     if ptr == C_NULL
         _set_lock!(obj, UNLOCKED)
     else
-        
+
         # Make sure object is unlocked and detach it.
         status = OK
         if obj.lock != UNLOCKED
@@ -227,8 +231,12 @@ end
 function _wrap(::Type{T},
                ptr::Ptr{AbstractSharedObject}) where {
                    T<:AbstractSharedObject}
+    # Julia  constructor function
     obj = T()
+    # attach the pointer to the object
     _set_ptr!(obj, ptr)
+
+    # set up finalizer
     if ptr != C_NULL
         finalizer(_finalize, obj)
         _set_final!(obj, true)

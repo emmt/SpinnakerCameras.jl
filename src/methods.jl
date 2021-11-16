@@ -9,6 +9,7 @@
 Base.Ref{T}() where {T<:Ptr{<:OpaqueObject}} = Ref{T}(0)
 Base.Ptr{T}() where {T<:OpaqueObject} = Ptr{T}(0)
 
+# convert SpinBool type to Boolean
 to_bool(x::SpinBool) = (x != zero(x))
 
 """
@@ -32,6 +33,7 @@ low-level interface, it shall not be used by the end-user.
 
 """
 handle(obj::SpinObject) = getfield(obj, :handle)
+handle(obj::System) = getfield(obj, :handle)
 
 _clear_handle!(obj::SpinObject) =
     setfield!(obj, :handle, fieldtype(typeof(obj), :handle)(0))
@@ -274,116 +276,15 @@ _finalize(obj::CameraList) = _finalize(obj) do ptr
     _check(err2, :spinCameraListDestroy)
 end
 
-#------------------------------------------------------------------------------
-# CAMERAS
-
-propertynames(::Camera) = (:nodemap, :tldevicenodemap, :tlstreamnodemap)
-
-"""
-    SpinnakerCameras.Camera(lst, i)
-
-yields the `i`-th entry of Spinnaker interface list `lst`.  This is the same
-as `lst[i]`.
-
-""" Camera
-
-"""
-    SpinnakerCameras.initialize(cam)
-
-initializes Spinnaker camera `cam`.
-
-""" initialize
-
-"""
-    SpinnakerCameras.deinitialize(cam)
-
-deinitializes Spinnaker camera `cam`.
-
-""" deinitialize
-
-
-"""
-    SpinnakerCameras.start(cam)
-
-starts acquisition with Spinnaker camera `cam`.
-
-""" start
-
-"""
-    SpinnakerCameras.stop(cam)
-
-stops acquisition with Spinnaker camera `cam`.
-
-""" stop
-
-for (jl_func, c_func) in ((:initialize,   :spinCameraInit),
-                          (:deinitialize, :spinCameraDeInit),
-                          (:start,        :spinCameraBeginAcquisition),
-                          (:stop,         :spinCameraEndAcquisition),)
-    _jl_func = Symbol("_", jl_func)
-    @eval begin
-        $jl_func(obj::Camera) = $_jl_func(handle(obj))
-        $_jl_func(ptr::CameraHandle) =
-            @checked_call($c_func, (CameraHandle,), ptr)
-    end
-end
-
-"""
-    SpinnakerCameras.isinitialized(cam)
-
-yields whether Spinnaker camera `cam` is initialized.
-
-""" isinitialized
-
-"""
-    SpinnakerCameras.isstreaming(cam)
-
-yields whether Spinnaker camera `cam` is currently acquiring images.
-
-""" isstreaming
-
-"""
-    isvalid(cam)
-
-yields whether Spinnaker camera `cam` is still valid for use.
-
-""" isvalid
-
-for (jl_func, c_func) in ((:isinitialized, :spinCameraIsInitialized),
-                          (:isstreaming,   :spinCameraIsStreaming),
-                          (:isvalid,       :spinCameraIsValid),)
-    _jl_func = Symbol("_", jl_func)
-    @eval begin
-        $jl_func(obj::Camera) = $_jl_func(handle(obj))
-        function $_jl_func(ptr::CameraHandle)
-            isnull(ptr) && return false
-            ref = Ref{SpinBool}(false)
-            @checked_call($c_func, (CameraHandle, Ptr{SpinBool}), ptr, ref)
-            return to_bool(ref[])
-        end
-    end
-end
-
-function _finalize(obj::Camera)
-    ptr = handle(obj)
-    if _isinitialized(ptr)
-        _deinitialize(ptr)
-    end
-    if !isnull(ptr)
-        print("Finalize Camera ...\n")
-
-        err1 = @unchecked_call(:spinCameraDeInit, (CameraHandle,), ptr)
-        err2 = @unchecked_call(:spinCameraRelease, (CameraHandle,), ptr)
-        _check(err1,:spinCameraDeInit)
-        _check(err2,:spinCameraRelease)
-
-        _clear_handle!(obj)
-    end
-    return nothing
-end
 
 #------------------------------------------------------------------------------
 # NODE MAPS AND NODES
+# camera properties related to GenICam architecture
+propertynames(::Camera) =(
+                            :nodemap,
+                            :tldevicenodemap,
+                            :tlstreamnodemap
+                            )
 
 for (T, key, func) in (
     (:System,    :tlnodemap,       :spinSystemGetTLNodeMap),
@@ -515,7 +416,9 @@ setValue(node::Node, value::Int64) = @checked_call(:spinIntegerSetValue,
                                                     (NodeHandle, Cint),
                                                     handle(node), value)
 
-
+setValue(node::Node, value::Bool) =  @checked_call(:spinBooleanSetValue,
+                                                    (NodeHandle, UInt8),
+                                                    handle(node), convert(UInt8,value))
 """
     SpinnakerCameras.setEnumValue(node, value)
 
@@ -524,7 +427,7 @@ Argument value is the value to be set
 
 """ setEnumtValue
 
-setEnumValue(node::Node, value::Int64) = @checked_call(:spinEnumerationSetIntValue,
+setEnumValue(node::Node, value::Int64) = @checked_call(:spinEnumerationSetEnumValue,
                                                     (NodeHandle, Cint),
                                                     handle(node), value)
 

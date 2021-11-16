@@ -14,39 +14,6 @@ Acquisition Control Root Node
 TODO: add acquisition control functionalities
 =========#
 
-"""
-   SpinnakerCameras.setAcquisitionmode(CameraNodemap, mode)
-   Set acquisition mode
-""" setAcquisitionmode
-
-
-function setAcquisitionmode(camera::Camera, mode_str::AbstractString)
-
-    _camNodemape = camera.nodemap
-   # get acquisition node
-   acquisitionModeNode = _camNodemape["AcquisitionMode"]
-
-   # check availability and readability
-   isavailable(acquisitionModeNode)
-   isreadable(acquisitionModeNode)
-
-   # get entry node
-   acquisitionModeEntryNode = EntryNode(acquisitionModeNode, mode_str)
-
-   # get entry node value
-   mode_num = getEntryValue(acquisitionModeEntryNode)
-
-   # set the acquisitionmode node
-   isavailable(acquisitionModeNode)
-   iswritable(acquisitionModeNode)
-
-   setEnumValue(acquisitionModeNode, mode_num)
-
-   finalize(acquisitionModeEntryNode)
-   finalize(acquisitionModeNode)
-   finalize(_camNodemape)
-
-end
 
 """
    SpinnakerCameras.acquire_n_save_images(camera, numImg, fname, fileformat)
@@ -147,72 +114,4 @@ function acquire_n_share_image(camera::Camera, arr::SharedArray, timeoutSec::Int
     SpinnakerCameras.stop(camera)
 
 
-end
-#---
-#==========
-
-   Exposure time
-
-===========#
-"""
-   SpinnakerCameras.configure_exposure(camNodeMap,
-
-
-""" configure_exposure
-
-function configure_exposure(camera::Camera, exposure_time::Float64)
-    _camNodemape = camera.nodemap
-
-   # turn off automatic exposure time
-   exposureAutoNode = _camNodemape["ExposureAuto"]
-   isavailable(exposureAutoNode)
-   isreadable(exposureAutoNode)
-   exposureOffNode = EntryNode(exposureAutoNode, "Off")
-   exposureOffInt = getEntryValue(exposureOffNode)
-
-   isavailable(exposureAutoNode)
-   iswritable(exposureAutoNode)
-   setEnumValue(exposureAutoNode, exposureOffInt)
-
-   # check maximum exposure time
-   exposureTimeNode = _camNodemape["ExposureTime"]
-   isavailable(exposureTimeNode)
-   isreadable(exposureTimeNode)
-   exposureMax = getmax(Float64, exposureTimeNode)
-   exposure_time > exposureMax ? exposure_time = exposureMax : nothing
-
-   isavailable(exposureTimeNode)
-   iswritable(exposureTimeNode)
-   setValue(exposureTimeNode, exposure_time)
-
-
-   finalize(exposureOffNode)
-   finalize(exposureAutoNode)
-   finalize(_camNodemape)
-
-end
-
-"""
-   SpinnakerCameras.reset_exposure(camNodeMap)
-
-
-""" reset_exposure
-
-function reset_exposure(camera::Camera)
-    _camNodemape =  camera.nodemap
-
-   # turn off automatic exposure time
-   exposureAutoNode = _camNodemape["ExposureAuto"]
-   isavailable(exposureAutoNode)
-   isreadable(exposureAutoNode)
-   exposureOnNode = EntryNode(exposureAutoNode, "Continuous")
-   exposureOnInt = getEntryValue(exposureOnNode)
-
-   isavailable(exposureAutoNode)
-   iswritable(exposureAutoNode)
-   setEnumValue(exposureAutoNode, exposureOnInt)
-
-   finalize(exposureOnNode)
-   finalize(exposureAutoNode)
-   finalize(_camNodemape)
 end

@@ -5,10 +5,6 @@
 #
 #------------------------------------------------------------------------------
 
-const PixelFormat_Mono8 = Cenum(0)
-const PixelFormat_Mono16 = Cenum(1)
-
-
 
 function _finalize(obj::Image)
     ptr = handle(obj)
@@ -19,14 +15,13 @@ function _finalize(obj::Image)
             @checked_call(:spinImageDestroy, (ImageHandle,), ptr)
         else
             @checked_call(:spinImageRelease, (ImageHandle,), ptr)
-            print("Image is released .. \n")
+
         end
     end
     return nothing
 end
 
 """
-   SpinnakerCameras.next_image(cam[, secs=Inf]) -> img
 
 yiedls the next image from camera `cam` waiting no longer than `secs` seconds.
 
@@ -206,17 +201,9 @@ end
 
  #====
 
- ImageFormatControl node
+ ImageFormatControl
 
  ===#
-
- # Sensor properties
-
-
-
-
-
-
 
 
 

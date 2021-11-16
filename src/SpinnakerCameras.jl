@@ -10,8 +10,6 @@ module SpinnakerCameras
 using Printf
 using Images
 
-
-
 using Base: @propagate_inbounds
 import Base:
     VersionNumber,
@@ -70,19 +68,23 @@ begin deps = normpath(joinpath(@__DIR__, "../deps/deps.jl"))
     include(deps)
 end
 
-include("typesSharedObjects.jl")
-include("sharedobjects.jl")
-include("sharedarrays.jl")
-include("taoerrors.jl")
-
 # Spinnaker interface
 include("macros.jl")
 include("types.jl")
 include("errors.jl")
 include("methods.jl")
 include("images.jl")
+
+
+include("typesSharedObjects.jl")
+include("times.jl")
+include("sharedobjects.jl")
+include("sharedarrays.jl")
+include("sharedcameras.jl")
+include("taoerrors.jl")
+
 include("acquisitions.jl")
-include("device.jl")
+include("camera.jl")
 
 
 

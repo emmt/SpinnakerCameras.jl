@@ -31,11 +31,11 @@ SpinnakerCameras.initialize(camera)
 
 print("Set acquisition mode to $modeStr ... \n")
 
-SpinnakerCameras.setAcquisitionmode(camera, modeStr)
+SpinnakerCameras.set_acquisitionmode(camera, modeStr)
 
 # set exposure
 print("Set exposure time to $exposure_time\n")
-SpinnakerCameras.configure_exposure(camera, exposure_time)
+SpinnakerCameras.set_exposuretime(camera, exposure_time)
 
 
 # acquire image
@@ -43,7 +43,7 @@ print("Acquiring images ..\n")
 fname = "SpinnakerCameras_image"
 SpinnakerCameras.acquire_n_save_images(camera, numImg, fname, imageFormat)
 
-SpinnakerCameras.reset_exposure(camera)
+SpinnakerCameras.reset(camera)
 SpinnakerCameras.deinitialize(camera)
 
 # finalize the objects
