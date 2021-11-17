@@ -6,15 +6,6 @@
 #
 #-----------------------------------------------------------------------------------
 
-#===========
-Acquisition Control Root Node
-
-   - Root node generation
-   - Enumerate
-TODO: add acquisition control functionalities
-=========#
-
-
 """
    SpinnakerCameras.acquire_n_save_images(camera, numImg, fname, fileformat)
 
@@ -67,18 +58,13 @@ end
 
 """
     SpinnakerCameras.acquire_n_share_image(camera, shared_array)
-
-"""
-
-#===
     1. acquire the next image
     2. check writability of the shared array
     3. lock the shared array
     4. copy the image into the shared_array
     5. unlock the shared array
     6. destroy the image
-===#
-
+""" acquire_n_share_image
 
 function acquire_n_share_image(camera::Camera, arr::SharedArray, timeoutSec::Int64 = 1 )
     #Begin acquisition

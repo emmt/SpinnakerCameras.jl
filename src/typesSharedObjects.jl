@@ -184,8 +184,7 @@ mutable struct SharedCamera <: AbstractCamera{Any}
     final::Bool    # a finalizer has been installed
     # Provide a unique inner constructor which forces starting with a NULL
     # pointer and no finalizer.
-    SharedCamera() = new(C_NULL, ImageConfigContext(),
-    0,UNLOCKED, false)
+    SharedCamera() = new(C_NULL, ImageConfigContext(),1,0,0,0,0,0,UNLOCKED, false)
 end
 
 """
@@ -260,7 +259,7 @@ mutable struct RemoteCamera{T<:AbstractFloat} <: AbstractCamera{T}
     b::DynamicArray{T,2}          # bias correction
     q::DynamicArray{T,2}          # numerator for weights
     r::DynamicArray{T,2}          # denominator for weights
-==#
+    ==#
     # To avoid (re)allocations, the pre-processed image and its weights are
     # stored in arrays that are owned by the image provider object.
     # wgt::DynamicArray{T,2}        # weights of last image

@@ -193,12 +193,12 @@ end
 """
     Tao.start(cam; skip=0, timeout=5.0)
 
-starts image acquisition by shared or remote camera `cam`.  If acquisition is
-already running, nothing is done; otherwise a `"start"` command is sent to the
-server and keywords `skip` and `timeout` amy be used to specify the number of
-initial frames to skip (none by default) and the maximum number of seconds to
-wait for each skipped image (5 seconds by default).  This is useful to avoid
-initial garbage images for cameras without a shutter.
+    starts image acquisition by shared or remote camera `cam`.  If acquisition is
+    already running, nothing is done; otherwise a `"start"` command is sent to the
+    server and keywords `skip` and `timeout` amy be used to specify the number of
+    initial frames to skip (none by default) and the maximum number of seconds to
+    wait for each skipped image (5 seconds by default).  This is useful to avoid
+    initial garbage images for cameras without a shutter.
 
 """
 start(cam::RemoteCamera; kwds...) = start(device(cam); kwds...)
@@ -228,9 +228,9 @@ end
 """
     Tao.stop(cam; timeout=5.0)
 
-stops image acquisition by shared or remote camera `cam` not waiting more than
-the limit set by `timeout` in seconds.  Nothing is done if acquisition is not
-running or about to start.
+    stops image acquisition by shared or remote camera `cam` not waiting more than
+    the limit set by `timeout` in seconds.  Nothing is done if acquisition is not
+    running or about to start.
 
 """
 stop(cam::RemoteCamera; kwds...) = stop(device(cam); kwds...)
@@ -247,9 +247,9 @@ end
 """
     Tao.abort(cam; timeout=5.0)
 
-aborts image acquisition by shared or remote camera `cam` not waiting more than
-the limit set by `timeout` in seconds.  Nothing is done if acquisition is not
-running or about to start.
+    aborts image acquisition by shared or remote camera `cam` not waiting more than
+    the limit set by `timeout` in seconds.  Nothing is done if acquisition is not
+    running or about to start.
 
 """
 abort(cam::RemoteCamera; kwds...) = abort(device(cam); kwds...)
@@ -262,6 +262,8 @@ abort(cam::SharedCamera; timeout::Real=5.0) = begin
     end
     nothing
 end
+
+#==
 """
     registerCamera(SharedCamera,Camera)
     register a camera to a shared camera instance
@@ -277,32 +279,32 @@ end
     wait_camera(camera)
     the shared camera waits for the image to be available
 """
-
+==#
 
 """
     TaoBindings.fetch(cam, sym, timeout=1.0) -> arr
 
-yields the shared array storing an image acquired by the remote camera `cam`.
-Argument `sym` may be `:last` to fetch the last acquired frame, or `:next` to
-fetch the next one.  The call never blocks more than the limit set by `timeout`
-and is just used for locking the camera (which should never be very long).
+    yields the shared array storing an image acquired by the remote camera `cam`.
+    Argument `sym` may be `:last` to fetch the last acquired frame, or `:next` to
+    fetch the next one.  The call never blocks more than the limit set by `timeout`
+    and is just used for locking the camera (which should never be very long).
 
-The result is a shared array which should be locked for reading to make sure
-its contents is preserved and up to date.
+    The result is a shared array which should be locked for reading to make sure
+    its contents is preserved and up to date.
 
-When fetching the next frame, the array counter should be checked to assert the
-vailidity of the frame:
+    When fetching the next frame, the array counter should be checked to assert the
+    vailidity of the frame:
 
-    arr = fetch(cam, :next)
-    rdlock(arr) do
-        if arr.counter > 0
-            # This is a valid frame.
-            ...
-        else
-            # Acquisition has been stopped.
-            ...
+        arr = fetch(cam, :next)
+        rdlock(arr) do
+            if arr.counter > 0
+                # This is a valid frame.
+                ...
+            else
+                # Acquisition has been stopped.
+                ...
+            end
         end
-    end
 
 """
 function fetch(cam::RemoteCamera, sym::Symbol, timeout=1.0)
@@ -347,23 +349,23 @@ end
 """
     timedwait(T, cam, timeout) -> [wgt,] img
 
-waits for a new image to be available from the remote camera `cam` and returns
-the result specified by `T`, that is either a simple image if `T = SingleImage`
-or an array of weights and an image if `T = WeightedImage`.
+    waits for a new image to be available from the remote camera `cam` and returns
+    the result specified by `T`, that is either a simple image if `T = SingleImage`
+    or an array of weights and an image if `T = WeightedImage`.
 
-The `timeout` argument is to specify a time limit for waiting.  If it is a
-2-tuple, `timeout[1]` is for waiting for the remote camera and `timeout[2]` is
-for waiting for the image.  Otherwise the default time limit of
-`TaoBindings.fetch` is assumed for waiting for the camera and `timeout` is for
-waiting for the image.
+    The `timeout` argument is to specify a time limit for waiting.  If it is a
+    2-tuple, `timeout[1]` is for waiting for the remote camera and `timeout[2]` is
+    for waiting for the image.  Otherwise the default time limit of
+    `TaoBindings.fetch` is assumed for waiting for the camera and `timeout` is for
+    waiting for the image.
 
-For example, to wait for the next image with a timout of 0.1 second on the
-shared camera and a timeout of 2 seconds on the image, call:
+    For example, to wait for the next image with a timout of 0.1 second on the
+    shared camera and a timeout of 2 seconds on the image, call:
 
-    timedwait( cam, (0.1, 2))
+        timedwait( cam, (0.1, 2))
 
 
-See also: [`TaoBindings.fetch`](@ref), [`TaoBindings.rdlock`](@ref).
+    See also: [`TaoBindings.fetch`](@ref), [`TaoBindings.rdlock`](@ref).
 
 """
 

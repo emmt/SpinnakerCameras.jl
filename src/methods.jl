@@ -145,7 +145,6 @@ are implemented:
 """ System
 
 _finalize(obj::System) = _finalize(obj) do ptr
-    print("Finalize System .. \n")
     @checked_call(:spinSystemReleaseInstance, (SystemHandle,), ptr)
 end
 
@@ -267,7 +266,6 @@ empty!(obj::CameraList) = begin
 end
 
 _finalize(obj::CameraList) = _finalize(obj) do ptr
-    print("Finalize Camera List .. \n")
     err1 = @unchecked_call(:spinCameraListClear,
                            (CameraListHandle,), ptr)
     err2 = @unchecked_call(:spinCameraListDestroy,
@@ -590,7 +588,6 @@ end
 function _finalize(obj::NodeMap)
     ptr = handle(obj)
     if !isnull(ptr)
-        print("Finalize Nodemap ...\n")
         _clear_handle!(obj)
 
     end
@@ -601,7 +598,6 @@ end
 function _finalize(obj::Node)
     ptr = handle(obj)
     if !isnull(ptr)
-        print("Finalize Node ...\n")
         _clear_handle!(obj)
     end
     return nothing
@@ -611,12 +607,7 @@ end
 function _finalize(obj::EntryNode)
     ptr = handle(obj)
     if !isnull(ptr)
-        print("Finalize Entry Node .. \n")
-        # @checked_call(:spinEnumerationReleaseNode,
-        #               (NodeHandle, NodeHandle),
-        #               handle(parent(obj)), ptr)
          _clear_handle!(obj)
-
     end
     return nothing
 end

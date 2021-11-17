@@ -23,9 +23,9 @@ end
 
 """
 
-yiedls the next image from camera `cam` waiting no longer than `secs` seconds.
+    yiedls the next image from camera `cam` waiting no longer than `secs` seconds.
 
-See [`SpinnakerCameras.Image`](@ref) for properties of images.
+    See [`SpinnakerCameras.Image`](@ref) for properties of images.
 
 """
 function next_image(camera::Camera)
@@ -48,41 +48,41 @@ end
 """
     img = SpinnakerCameras.Image(pixelformat, (width, height); offsetx=0, offsety=0)
 
-builds a new Spinnaker image instance.  The pixel format is an integer, for
-example one of:
+    builds a new Spinnaker image instance.  The pixel format is an integer, for
+    example one of:
 
-- `SpinnakerCameras.PixelFormat_Mono8`
+    - `SpinnakerCameras.PixelFormat_Mono8`
 
-- `SpinnakerCameras.PixelFormat_Mono16`
+    - `SpinnakerCameras.PixelFormat_Mono16`
 
-The `img.key` syntax is supported for the following properties:
+    The `img.key` syntax is supported for the following properties:
 
-    img.bitsperpixel     # yields the number of bits per pixel of `img`
-    img.buffersize       # yields the buffer size of `img`
-    img.data             # yields the image data of `img`
-    img.privatedata      # yields the private data of `img`
-    img.frameid          # yields the frame Id of `img`
-    img.height           # yields the height of `img`
-    img.id               # yields the Id of `img`
-    img.offsetx          # yields the X-offset of `img`
-    img.offsety          # yields the Y-offset of `img`
-    img.paddingx         # yields the X-padding of `img`
-    img.paddingy         # yields the Y-padding of `img`
-    img.payloadtype      # yields the payload type of `img`
-    img.pixelformat      # yields the pixel format of `img`
-    img.pixelformatname  # yields the pixel format name of `img`
-    img.size             # yields the size of `img` (number of bytes)
-    img.stride           # yields the stride of `img`
-    img.timestamp        # yields the timestamp of `img`
-    img.validpayloadsize # yields the valid payload size of `img`
-    img.width            # yields the width of `img`
+        img.bitsperpixel     # yields the number of bits per pixel of `img`
+        img.buffersize       # yields the buffer size of `img`
+        img.data             # yields the image data of `img`
+        img.privatedata      # yields the private data of `img`
+        img.frameid          # yields the frame Id of `img`
+        img.height           # yields the height of `img`
+        img.id               # yields the Id of `img`
+        img.offsetx          # yields the X-offset of `img`
+        img.offsety          # yields the Y-offset of `img`
+        img.paddingx         # yields the X-padding of `img`
+        img.paddingy         # yields the Y-padding of `img`
+        img.payloadtype      # yields the payload type of `img`
+        img.pixelformat      # yields the pixel format of `img`
+        img.pixelformatname  # yields the pixel format name of `img`
+        img.size             # yields the size of `img` (number of bytes)
+        img.stride           # yields the stride of `img`
+        img.timestamp        # yields the timestamp of `img`
+        img.validpayloadsize # yields the valid payload size of `img`
+        img.width            # yields the width of `img`
 
-Call `size(img)` to get its dimensions as a 2-tuple of `Int`s.
+    Call `size(img)` to get its dimensions as a 2-tuple of `Int`s.
 
-See also [`SpinnakerCameras.next_image`](@ref).
+    See also [`SpinnakerCameras.next_image`](@ref).
 
 """ Image
-
+#==
 function Image(pixelformat::Integer,
                dims::Tuple{Integer,Integer};
                offsetx::Integer = 0,
@@ -99,7 +99,7 @@ function Image(pixelformat::Integer,
         ref, width, height, offsetx, offsety, pixelformat, C_NULL)
     return Image(ref[], true)
 end
-
+==#
 
 size(img::Image) = (Int(img.width), Int(img.height))
 
@@ -165,6 +165,7 @@ for (sym, func, type) in (
     end
 end
 
+# get data
 function getproperty(img::Image , ::Val{:data})
     ref = Ref{Ptr{Cvoid}}(0)
     @checked_call(:spinImageGetData,(ImageHandle, Ptr{Ptr{Cvoid}}), handle(img), ref)
@@ -197,16 +198,6 @@ function getproperty(img::Image, ::Val{:pixelformatname})
         end
     end
 end
-
-
- #====
-
- ImageFormatControl
-
- ===#
-
-
-
 
 
 """

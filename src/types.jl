@@ -344,7 +344,7 @@ SensorShutterMode = Dict(1=>"Global",
                         )
 
 """
-    ImageConfigContext
+    igContext
     stores configuration parameters for the hardware to be set prior to the
     next acquisition loop
 """ ImageConfigContext
@@ -401,6 +401,7 @@ mutable struct Image <: SpinObject
         return finalizer(_finalize, new(ref[], true))
 
     end
+    #==
     # create with image format context
     Image(config::ImageConfigContext, data::Array{UInt8}) = begin
         ref = Ref{ImageHandle}(0)
@@ -412,7 +413,7 @@ mutable struct Image <: SpinObject
         return finalizer(_finalize, new(ref[], true))
 
     end
-
+    ==#
 end
 
 mutable struct System <: SpinObject

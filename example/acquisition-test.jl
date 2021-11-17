@@ -20,7 +20,7 @@ camNum = length(camList)
 if camNum == 0
     finalize(camList)
     finalize(system)
-    print("No cameras found... \n Done...")
+    print("No cameras found.`shmid.txt`.. \n Done...")
 
 end
 print("$(camNum) cameras are found \n" )

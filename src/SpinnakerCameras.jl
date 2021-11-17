@@ -68,13 +68,14 @@ begin deps = normpath(joinpath(@__DIR__, "../deps/deps.jl"))
     include(deps)
 end
 
+
+
 # Spinnaker interface
 include("macros.jl")
 include("types.jl")
-include("errors.jl")
 include("methods.jl")
+include("errors.jl")
 include("images.jl")
-
 
 include("typesSharedObjects.jl")
 include("times.jl")

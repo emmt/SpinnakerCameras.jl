@@ -1,21 +1,11 @@
 #
-# device.jl
+# camera.jl
 #
 # general camera status functions
 # APIs
 #
 
 #------------------------------------------------------------------------------
-# CAMERAS
-# Camera properties
-# propertynames(::Camera) =(
-#                             :shuttermode
-#                             :exposuremode,
-#                             :gainmode
-#
-#                             )
-#
-
 #==
     Configuration functions
 ==#
@@ -279,7 +269,7 @@ end
     Acquisition
     create image buffer, and start image acquisition.
 """ beginCameraAcquisition
-
+#==
 function beginCameraAcquisition(camera::Camera, imgConfig::ImageConfigContext ; nbufs::Integer = 2)
 
     # allocate image buffer
@@ -324,6 +314,7 @@ function beginCameraAcquisition(camera::Camera, imgConfig::ImageConfigContext ; 
     end
 
 end
+==#
 
 """
     SpinnakerCameras.reset(camera)
@@ -362,7 +353,6 @@ function _finalize(obj::Camera)
         _deinitialize(ptr)
     end
     if !isnull(ptr)
-        print("Finalize Camera ...\n")
 
         err1 = @unchecked_call(:spinCameraDeInit, (CameraHandle,), ptr)
         err2 = @unchecked_call(:spinCameraRelease, (CameraHandle,), ptr)
