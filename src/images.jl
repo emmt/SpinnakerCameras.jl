@@ -82,7 +82,7 @@ end
     See also [`SpinnakerCameras.next_image`](@ref).
 
 """ Image
-#==
+
 function Image(pixelformat::Integer,
                dims::Tuple{Integer,Integer};
                offsetx::Integer = 0,
@@ -99,7 +99,7 @@ function Image(pixelformat::Integer,
         ref, width, height, offsetx, offsety, pixelformat, C_NULL)
     return Image(ref[], true)
 end
-==#
+
 
 size(img::Image) = (Int(img.width), Int(img.height))
 

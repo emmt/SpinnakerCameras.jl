@@ -67,14 +67,11 @@ begin deps = normpath(joinpath(@__DIR__, "../deps/deps.jl"))
         "File \"$deps\" does not exits, see \"README.md\" for installation.")
     include(deps)
 end
-
-
-
 # Spinnaker interface
 include("macros.jl")
 include("types.jl")
-include("methods.jl")
 include("errors.jl")
+include("methods.jl")
 include("images.jl")
 
 include("typesSharedObjects.jl")
@@ -84,8 +81,8 @@ include("sharedarrays.jl")
 include("sharedcameras.jl")
 include("taoerrors.jl")
 
-include("acquisitions.jl")
 include("camera.jl")
+include("acquisitions.jl")
 
 
 

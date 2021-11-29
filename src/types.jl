@@ -32,7 +32,6 @@ a resolution of one nanosecond, that is [`TaoBindings.TimeSpec`](@ref) and
 abstract type AbstractHighResolutionTime end
 
 """
-
 The structure `TaoBindings.HighResolutionTime` is the Julia equivalent to the
 TAO `tao_time_t` structure.  Its members are `sec`, an integer number of
 seconds, and `nsec`, an integer number of nanoseconds.
@@ -371,10 +370,6 @@ mutable struct ImageConfigContext
     end
 end
 
-# Julia ImageStaus type
-const ImageStatus = Cenum
-
-
 mutable struct Image <: SpinObject
     # The `created` member of images is to distinguish between the two kinds of
     # images provided by the Spinnaker C SDK:
@@ -390,31 +385,12 @@ mutable struct Image <: SpinObject
     created::Bool
     Image(handle::ImageHandle, created::Bool) =
         finalizer(_finalize, new(handle, created))
-    # Image() = Image(ImageHandle(0), false)
-
-    # create empty
-    Image() = begin
-        ref = Ref{ImageHandle}(0)
-        @checked_call(:spinImageCreateEmpty,
-                      (Ptr{ImageHandle},),
-                      ref)
-        return finalizer(_finalize, new(ref[], true))
-
-    end
-    #==
-    # create with image format context
-    Image(config::ImageConfigContext, data::Array{UInt8}) = begin
-        ref = Ref{ImageHandle}(0)
-        @checked_call(:spinImageCreateEx,
-                      (Ptr{ImageHandle},Csize_t,Csize_t,Csize_t,Csize_t,
-                      Cenum,Ptr{Cvoid}),
-                      ref, config.width, config.height, config.offsetX,
-                      config.offsetY, Integer(config.pixelformat), C_NULL)
-        return finalizer(_finalize, new(ref[], true))
-
-    end
-    ==#
+   # undef Image
+    Image() = Image(ImageHandle(0), false)
 end
+
+# Julia ImageStaus type
+const ImageStatus = Cenum
 
 mutable struct System <: SpinObject
     handle::SystemHandle
@@ -519,9 +495,8 @@ end
 mutable struct Camera <: SpinObject
     handle::CameraHandle
     system::System # needed to maintain a reference to the "system" instance
-    buff::Image
-    ts::HighResolutionTime
-    registerd::Integer
+
+    # get camera from indexing a camera list
     function Camera(lst::CameraList, i::Integer)
         1 ≤ i ≤ length(lst) || error(
             "out of bound index in Spinnaker ", shortname(lst))
@@ -532,8 +507,6 @@ mutable struct Camera <: SpinObject
                       handle(lst), i - 1, ref)
         return finalizer(_finalize, new(ref[], sys))
     end
-    # undef camera for shared camera initialization
-    Camera() = new()
 end
 
 # The `parent` member of a node map is needed to keep a reference on the
@@ -698,4 +671,12 @@ enumeration of the possible namespaces of a register.
     Custom             # name resides in custom namespace
     Standard           # name resides in one of the standard namespaces
     UndefinedNameSpace # Object is not yet initialized
+end
+
+
+mutable struct DataPack
+   img::Array{UInt8}
+   ts::UInt64
+   numID::Int64
+   DataPack() = new(Array{UInt8}(undef,(1536,2048)),0,0)
 end

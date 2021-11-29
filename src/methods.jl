@@ -9,8 +9,9 @@
 Base.Ref{T}() where {T<:Ptr{<:OpaqueObject}} = Ref{T}(0)
 Base.Ptr{T}() where {T<:OpaqueObject} = Ptr{T}(0)
 
-# convert SpinBool type to Boolean
 to_bool(x::SpinBool) = (x != zero(x))
+
+HRT2Int64(ts::HighResolutionTime) = convert(UInt64,ts.sec*1e9 + ts.nsec)
 
 """
     SpinnakerCameras.isnull(arg)
@@ -33,7 +34,6 @@ low-level interface, it shall not be used by the end-user.
 
 """
 handle(obj::SpinObject) = getfield(obj, :handle)
-handle(obj::System) = getfield(obj, :handle)
 
 _clear_handle!(obj::SpinObject) =
     setfield!(obj, :handle, fieldtype(typeof(obj), :handle)(0))
@@ -275,14 +275,9 @@ _finalize(obj::CameraList) = _finalize(obj) do ptr
 end
 
 
+
 #------------------------------------------------------------------------------
 # NODE MAPS AND NODES
-# camera properties related to GenICam architecture
-propertynames(::Camera) =(
-                            :nodemap,
-                            :tldevicenodemap,
-                            :tlstreamnodemap
-                            )
 
 for (T, key, func) in (
     (:System,    :tlnodemap,       :spinSystemGetTLNodeMap),
@@ -414,9 +409,7 @@ setValue(node::Node, value::Int64) = @checked_call(:spinIntegerSetValue,
                                                     (NodeHandle, Cint),
                                                     handle(node), value)
 
-setValue(node::Node, value::Bool) =  @checked_call(:spinBooleanSetValue,
-                                                    (NodeHandle, UInt8),
-                                                    handle(node), convert(UInt8,value))
+
 """
     SpinnakerCameras.setEnumValue(node, value)
 
@@ -425,7 +418,7 @@ Argument value is the value to be set
 
 """ setEnumtValue
 
-setEnumValue(node::Node, value::Int64) = @checked_call(:spinEnumerationSetEnumValue,
+setEnumValue(node::Node, value::Int64) = @checked_call(:spinEnumerationSetIntValue,
                                                     (NodeHandle, Cint),
                                                     handle(node), value)
 
@@ -588,6 +581,7 @@ end
 function _finalize(obj::NodeMap)
     ptr = handle(obj)
     if !isnull(ptr)
+        print("Finalize Nodemap ...\n")
         _clear_handle!(obj)
 
     end
@@ -607,7 +601,11 @@ end
 function _finalize(obj::EntryNode)
     ptr = handle(obj)
     if !isnull(ptr)
+        # @checked_call(:spinEnumerationReleaseNode,
+        #               (NodeHandle, NodeHandle),
+        #               handle(parent(obj)), ptr)
          _clear_handle!(obj)
+
     end
     return nothing
 end

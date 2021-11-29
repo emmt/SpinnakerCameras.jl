@@ -46,6 +46,7 @@ shared memory.
 """
 abstract type AbstractSharedObject end
 
+
 """
 
 Type `TaoBindings.SharedObject` is used to represent a generic shared TAO
@@ -96,8 +97,7 @@ following properties:
 | `timestamp`       | no     | Time-stamp  of the shared array                            |
 | `type`            | yes    | Type identifier of the shared object                       |
 
-Column *Const.* indicates whether the property is constant during shared object
-lifetime.
+Column *Const.* indicates whether the property is constant during shared object lifetime.
 
 !!! warn
     Properties should all be considered as read-only by the end-user and never
@@ -110,6 +110,46 @@ mutable struct SharedArray{T,N} <: DenseArray{T,N}
     lock::LockMode
     final::Bool    # a finalizer has been installed
 end
+
+
+"""
+    SpinnakerCameras.RemoteCameraState
+    enumeration of the RemoteCamera States
+
+""" RemoteCameraState
+struct RemoteCameraState
+    state::Cint
+end
+const STATE_UNKNOWN = RemoteCameraState(0)
+const STATE_INIT    = RemoteCameraState(1)
+const STATE_WAIT    = RemoteCameraState(2)
+const STATE_ERROR   = RemoteCameraState(3)
+const STATE_WORK    = RemoteCameraState(4)
+const STATE_QUIT    = RemoteCameraState(5)
+
+"""
+    SpinnakercCameras.RemoteCameraCommand
+enumeration of the Remote Camera Commands
+
+""" RemoteCameraCommand
+struct RemoteCameraCommand
+    cmd::Cint
+end
+
+const   CMD_INIT  = RemoteCameraCommand(0)
+const   CMD_WAIT  = RemoteCameraCommand(1)
+const   CMD_WORK = RemoteCameraCommand(2)
+const   CMD_STOP  = RemoteCameraCommand(3)
+const   CMD_ABORT  = RemoteCameraCommand(4)
+const   CMD_QUIT  = RemoteCameraCommand(5)
+
+
+struct ShCamSIG
+    sig::Cint
+end
+const   SIG_DONE = ShCamSIG(0)
+const   SIG_OK = ShCamSIG(1)
+const   SIG_ERROR = ShCamSIG(2)
 
 """
 
@@ -171,31 +211,24 @@ are consistent, the camera should be locked by the caller.  For example:
 mutable struct SharedCamera <: AbstractCamera{Any}
 
     ptr::Ptr{AbstractSharedObject}
-    img_config::ImageConfigContext
+    img_config::ImageConfigContext  # file
+    attachedCam::Int8
+    cameras::Vector{Camera}
 
-    counter::Int32
+    listlength::Int8        # number of images memorized my the camera owner
     last::Int16
     next::Int16
     lastTS::Int16
     nextTS::Int16
 
-    state::Int8
     lock::LockMode
     final::Bool    # a finalizer has been installed
+
     # Provide a unique inner constructor which forces starting with a NULL
     # pointer and no finalizer.
-    SharedCamera() = new(C_NULL, ImageConfigContext(),1,0,0,0,0,0,UNLOCKED, false)
+    SharedCamera() = new(C_NULL,ImageConfigContext(),0,Vector{Camera}(undef,5),5,1,0,0,0,UNLOCKED, false)
 end
 
-"""
-
-Union `TaoBindings.AnySharedObject` is defined to represent any shared objects
-in `TaoBindings` because shared arrays and shared cameras inherit from
-`DenseArray` and `AbstractCamera` respectively, not from
-`TaoBindings.AbstractSharedObject`.
-
-"""
-const AnySharedObject = Union{AbstractSharedObject,SharedArray,SharedCamera}
 
 # The following is to have a complete signature for type statbility.
 const DynamicArray{T,N} = ResizableArray{T,N,Vector{T}}
@@ -245,51 +278,213 @@ which are arrays used to store the image
 """
 
 
-mutable struct RemoteCamera{T<:AbstractFloat} <: AbstractCamera{T}
-    arrays::Vector{SharedArray{T,2}} # list of attached shared arrays
+mutable struct RemoteCamera{T<:Number} <: AbstractCamera{T}
+    arrays::Vector{Array{T,2}} # list of attached shared arrays
     shmids::Vector{ShmId}            # list of corresponding identifiers
-    timestamps::Vector{HighResolutionTime}         # list of timestamps of the shared array
+    timestamps::Vector{UInt64}         # list of timestamps of the shared array
     device::SharedCamera             # connection to remote camera
-    cmds::ResizableVector{Int32}               # command queue
+
     time_origin::HighResolutionTime     # timestamp when the server is up
 
-    # Preprocessing parameters.
-    #==
-    a::DynamicArray{T,2}          # gain correction
-    b::DynamicArray{T,2}          # bias correction
-    q::DynamicArray{T,2}          # numerator for weights
-    r::DynamicArray{T,2}          # denominator for weights
-    ==#
-    # To avoid (re)allocations, the pre-processed image and its weights are
-    # stored in arrays that are owned by the image provider object.
-    # wgt::DynamicArray{T,2}        # weights of last image
-    img::DynamicArray{T,2}        # last image
-    imgTime::HighResolutionTime       # last image timestamp
+    img::SharedArray{T,2}                # last image
+    imgTime::SharedArray{UInt64,1}       # last image timestamp
 
-    function RemoteCamera{T}(device::SharedCamera) where {T<:AbstractFloat}
+    function RemoteCamera{T}(device::SharedCamera,dims::NTuple{2,Int64}) where {T<:Number}
         isconcretetype(T) || error("pixel type $T must be concrete")
         len = Int(device.listlength)
-        arrays = Vector{SharedArray{T,2}}(undef, len)
+        arrays = fill!(Vector{Array{T,2}}(undef, len),zeros(dims))
         shmids = fill!(Vector{ShmId}(undef, len), -1)
-        timestamps = fill!(Vector{HighResolutionTime}(undef,len), -1)
-        cmds = ResizableVector{Int32}(undef,0)
-        time_origin = device.timestamp
-        # dims = (0, 0) # size is not yet known
-        #==
-        a = fill!(ResizableArray{T,2}(undef, dims), 1)
-        b = fill!(ResizableArray{T,2}(undef, dims), 0)
-        q = fill!(ResizableArray{T,2}(undef, dims), 1)
-        r = fill!(ResizableArray{T,2}(undef, dims), 1)
-        wgt = fill!(ResizableArray{T,2}(undef, dims), 0)
-        ==#
-        img = fill!(ResizableArray{T,2}(undef, dims), 0)
-        imgTime = HighResolutionTime(0,0)
-        return new{T}(arrays, shmids, timestamps, device,cmds,time_origin,img,imgTime)
+        timestamps = fill!(Vector{UInt64}(undef,len), 0)
+
+
+        imgBuff = create(SharedArray{T,2},dims)
+        img = attach(SharedArray, imgBuff.shmid)
+
+        imgTimeBuff = create(SharedArray{UInt64,1},1)
+        imgTime = attach(SharedArray, imgTimeBuff.shmid)
+
+        wrlock(img, 0.5) do
+            fill!(img,convert(T,0))
+        end
+
+        wrlock(imgTime, 0.5) do
+            fill!(imgTime,0)
+        end
+
+        return new{T}(arrays, shmids, timestamps, device,HighResolutionTime(0,0),img,imgTime)
     end
 end
 
 const RemoteCameraOutput{T} = DynamicArray{T,2}
 const RemoteCameraOutputs{N,T} = NTuple{N,DynamicArray{T,2}}
+#--- Monitor
+_to_Cint(state::RemoteCameraState) =  state.state
+_to_Cint(cmd::RemoteCameraCommand) =  cmd.cmd
+_to_Cint(sig::ShCamSIG) = sig.sig
+
+abstract type AbstractMonitor end
+
+mutable struct RemoteCameraMonitor <: AbstractMonitor
+    ptr::Ptr{AbstractSharedObject}  # to access mutex lock capability only
+    final::Bool
+
+    cmds::SharedArray{Cint,1}
+    state::SharedArray{Cint,1}
+    fetch_index::Int64
+    release_counter::Int64
+    procedures::Vector{Function}
+
+    empty_cmds::Condition
+    wait_to_fetch::Condition
+    fetch_index_updated::Condition
+    fetch_index_read::Condition
+
+    lock::LockMode
+
+    function RemoteCameraMonitor(p_list::Vector{Function})
+        # check the condition of th eprocedure list
+
+        cmds_pre = create(SharedArray{Cint,1},4)
+        cmds = attach(SharedArray,cmds_pre.shmid)
+        wrlock(cmds) do
+            fill!(cmds,-1)
+        end
+
+        state_pre = create(SharedArray{Cint,1},1)
+        state = attach(SharedArray, state_pre.shmid)
+        wrlock(state) do
+            fill!(state,-1)
+        end
+
+         return new(C_NULL,false,cmds, state,1, 1,p_list,Condition(), Condition(),Condition(),Condition(),UNLOCKED )
+    end
+
+end
+
+iscmdempty(monitor::RemoteCameraMonitor) = begin
+        if !islocked(monitor)
+            try
+                rdlock(monitor)
+                cmds = copy(monitor.cmds)
+            finally
+                unlock(monitor)
+            end
+        else
+            cmds = copy(monitor.cmds)
+        end
+
+        return (sum(cmds .== undef) == 0) ?  true :  false
+
+end
+
+function monitor_read_cmd(monitor::RemoteCameraMonitor)
+    cmd = copy(monitor.cmds[1])
+    return RemoteCameraCommand(cmd)
+end
+
+function monitor_read_state(monitor::RemoteCameraMonitor)
+    state = copy(monitor.state[1])
+    return RemoteCameraState(state)
+end
+
+function monitor_write_cmd!(monitor::RemoteCameraMonitor, val::Vector{RemoteCameraCommand})
+    # if the cmds is not empty => can't write
+    val = map(_to_Cint,val)
+    length(val) <= length(monitor.cmds) ||throw(ArgumentError("too many commands"))
+    iscmdempty(monitor) == true ||  @warn "the command list is not empty. Can't write to"
+    monitor.cmds[1:length(val)] = val[:]
+    nothing
+
+end
+
+monitor_write_state!(monitor::RemoteCameraMonitor, val::RemoteCameraState) = begin
+                                        copyto!(monitor.state,_to_Cint(val))
+                                        nothing
+                                    end
+
+function monitor_push_cmd!(monitor::RemoteCameraMonitor)
+        tmp = monitor.cmds[2:end]
+        monitor.cmds[1:end] = vcat(tmp, [-1])
+        nothing
+end
+
+function monitor_clear_state!(monitor::RemoteCameraMonitor)
+    monitor.state[1] = -1
+end
+read_rcounter(monitor::RemoteCameraMonitor) = monitor.release_counter
+
+inc_rcounter!(monitor::RemoteCameraMonitor) = monitor.release_counter+1
+
+const default_P_list =[ monitor_read_cmd,   monitor_write_cmd!,
+                        monitor_read_state, monitor_write_state!,
+                        monitor_push_cmd!,  monitor_clear_state!    ]
+
+
+##
+mutable struct SharedCameraMonitor <: AbstractMonitor
+    ptr::Ptr{AbstractSharedObject}  # to access mutex lock capability only
+    final::Bool
+
+    cmd::RemoteCameraCommand
+    start_status::ShCamSIG
+    completion::ShCamSIG
+    image_counter::Int64
+    procedures::Vector{Function}
+
+    no_cmd::Condition
+    not_started::Condition
+    state_updating::Condition
+    not_complete::Condition
+
+    lock::LockMode
+
+    SharedCameraMonitor(p_list::Vector{Function}) = new(C_NULL,false,
+    RemoteCameraCommand(-1), ShCamSIG(-1),ShCamSIG(-1),0, p_list,Condition(),
+    Condition(),Condition(),Condition(),UNLOCKED )
+
+end
+
+function monitor_read_cmd(monitor::SharedCameraMonitor)
+    cmd = copy(monitor.cmd[1])
+    return RemoteCameraCommand(cmd)
+end
+function monitor_write_cmd!(monitor::SharedCameraMonitor, val::RemoteCameraCommand)
+    # if the cmds is not empty => can't write
+    monitor.cmd == RemoteCameraCommand(-1) ||  @warn "the shared camera can't receive command yet"
+    monitor.cmd = val
+    notify(monitor.no_cmd)
+    nothing
+end
+
+function monitor_read_start_status(monitor::SharedCameraMonitor)
+    st = copy(monitor.start_status)
+    return st
+end
+function monitor_write_start_status!(monitor::SharedCameraMonitor, val::ShCamSIG)
+    copyto!(monitor.start_status,val)
+    notify(not_started)
+    nothing
+end
+
+function monitor_read_completion(monitor::SharedCameraMonitor)
+    st = copy(monitor.completion)
+    return st
+end
+function monitor_write_completion!(monitor::SharedCameraMonitor, val::ShCamSIG)
+    copyto!(monitor.completion,val)
+    notify(not_complete)
+    nothing
+end
+
+function monitor_reset_cmd!(monitor::SharedCameraMonitor)
+    monitor.cmd = RemoteCameraCommand(-1)
+    nothing
+end
+
+const default_p_list_sh = [ monitor_read_cmd,           monitor_write_cmd!,
+                            monitor_read_start_status,  monitor_write_start_status!,
+                            monitor_read_completion,    monitor_write_completion!,
+                            monitor_reset_cmd!  ]
 
 
 """
@@ -300,13 +495,23 @@ read/write locks.  Methods [`TaoBindings.rdlock`](@ref),
 [`TaoBindings.islocked`](@ref) are applicable to such objects.
 
 """
-const Lockable = Union{AbstractSharedObject,SharedArray}
-
-
+const Lockable = Union{AbstractSharedObject,SharedArray,AbstractMonitor,RemoteCamera, SharedCamera}
 
 
 """
 
+Union `TaoBindings.AnySharedObject` is defined to represent any shared objects
+in `TaoBindings` because shared arrays and shared cameras inherit from
+`DenseArray` and `AbstractCamera` respectively, not from
+`TaoBindings.AbstractSharedObject`.
+
+"""
+const AnySharedObject = Union{AbstractSharedObject,SharedArray,SharedCamera,RemoteCamera,AbstractMonitor}
+
+const TaoSharedObject = Union{AbstractSharedObject,SharedArray}
+
+
+"""
 The singleton type `Basic` is a *trait* used to indicate that the version
 provided by Julia must be used for a vectorized method.
 
@@ -315,32 +520,3 @@ context.  For instance BLAS `lmul!(A,B)` for small arrays.
 
 """
 struct Basic end
-
-
-#------------------------------------------------------------------------------
-
-"""
-    SpinnakerCameras.RemoteCameraState
-    enumeration of the RemoteCamera States
-
-"""
-@enum RemoteCameraState begin
-    STATE_INIT
-    STATE_WAIT
-    STATE_ERROR
-    STATE_WORK
-    STATE_QUIT
-end
-
-"""
-    SpinnakercCameras.RemoteCameraCommand
-enumeration of the Remote Camera Commands
-
-"""
-@enum RemoteCameraCommand begin
-    CMD_INIT
-    CMD_WAIT
-    CMD_ERROR
-    CMD_WORK
-    CMD_QUIT
-end

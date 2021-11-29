@@ -21,10 +21,10 @@ propertynames(obj::SharedObject) =
      :type,
      )
 
-getproperty(obj::AnySharedObject, sym::Symbol) =
+getproperty(obj::TaoSharedObject, sym::Symbol) =
     getattribute(obj, Val(sym))
 
-setproperty!(obj::AnySharedObject, sym::Symbol, val) =
+setproperty!(obj::TaoSharedObject, sym::Symbol, val) =
     setattribute!(obj, Val(sym), val)
 
 """
@@ -46,29 +46,29 @@ should be specialized for different object types and attribute names.
 
 """ getattribute
 
-getattribute(obj::AnySharedObject, ::Val{:accesspoint}) =
+getattribute(obj::TaoSharedObject, ::Val{:accesspoint}) =
     _pointer_to_string(ccall((:tao_get_shared_object_accesspoint, taolib),
                              Ptr{UInt8}, (Ptr{AbstractSharedObject},), obj))
 
-getattribute(obj::AnySharedObject, ::Val{:lock}) = getfield(obj, :lock)
+getattribute(obj::TaoSharedObject, ::Val{:lock}) = getfield(obj, :lock)
 
-getattribute(obj::AnySharedObject, ::Val{:owner}) =
+getattribute(obj::TaoSharedObject, ::Val{:owner}) =
     _pointer_to_string(ccall((:tao_get_shared_object_owner, taolib),
                              Ptr{UInt8}, (Ptr{AbstractSharedObject},), obj))
 
-getattribute(obj::AnySharedObject, ::Val{:shmid}) =
+getattribute(obj::TaoSharedObject, ::Val{:shmid}) =
     ccall((:tao_get_shared_data_shmid, taolib), ShmId,
           (Ptr{AbstractSharedObject},), obj)
 
-getattribute(obj::AnySharedObject, ::Val{:size}) =
+getattribute(obj::TaoSharedObject, ::Val{:size}) =
     ccall((:tao_get_shared_data_size, taolib), Csize_t,
           (Ptr{AbstractSharedObject},), obj)
 
-getattribute(obj::AnySharedObject, ::Val{:type}) =
+getattribute(obj::TaoSharedObject, ::Val{:type}) =
     ccall((:tao_get_shared_object_type, taolib), UInt32,
           (Ptr{AbstractSharedObject},), obj)
 
-getattribute(obj::AnySharedObject, ::Val{sym}) where {sym} =
+getattribute(obj::TaoSharedObject, ::Val{sym}) where {sym} =
     throw_non_existing_attribute(obj, sym)
 
 
@@ -107,6 +107,8 @@ _set_ptr!(obj::AnySharedObject, val::Ptr{AbstractSharedObject}) =
     setfield!(obj, :ptr, val)
 _set_ptr!(obj::AnySharedObject, val::Ptr{Cvoid}) = # FIXME: avoid this!
     _set_ptr!(obj, Ptr{AbstractSharedObject}(val))
+_set_ptr!(obj::AbstractMonitor, val::Ptr{AbstractSharedObject}) =
+    setfield!(obj, :ptr, val)
 _set_lock!(obj::AnySharedObject, val::LockMode) = setfield!(obj, :lock, val)
 _get_final(obj::AnySharedObject) = getfield(obj, :final)
 _set_final!(obj::AnySharedObject, val::Bool) = setfield!(obj, :final, val)
@@ -122,10 +124,6 @@ _fix_shared_object_type(type::Signed) :: UInt32 =
 _fix_shared_object_type(type::Unsigned) :: UInt32 =
     _fix_shared_object_type(convert(UInt32, type))
 
-"""
-
-
-"""
 function create(::Type{SharedObject}, type::Integer, size::Integer;
                 owner::AbstractString = default_owner(),
                 perms::Integer = 0o600)
@@ -230,13 +228,9 @@ end
 # of type `T`.
 function _wrap(::Type{T},
                ptr::Ptr{AbstractSharedObject}) where {
-                   T<:AbstractSharedObject}
-    # Julia  constructor function
+                   T<:AnySharedObject}
     obj = T()
-    # attach the pointer to the object
     _set_ptr!(obj, ptr)
-
-    # set up finalizer
     if ptr != C_NULL
         finalizer(_finalize, obj)
         _set_final!(obj, true)
@@ -436,6 +430,7 @@ function unlock(obj::AnySharedObject)
     if _get_ptr(obj) != C_NULL
         _check(_call_unlock(_get_ptr(obj)))
     end
+
     nothing
 end
 

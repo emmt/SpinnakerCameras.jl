@@ -43,7 +43,7 @@ print("Acquiring images ..\n")
 fname = "SpinnakerCameras_image"
 SpinnakerCameras.acquire_n_save_images(camera, numImg, fname, imageFormat)
 
-SpinnakerCameras.reset(camera)
+# SpinnakerCameras.reset(camera)
 SpinnakerCameras.deinitialize(camera)
 
 # finalize the objects

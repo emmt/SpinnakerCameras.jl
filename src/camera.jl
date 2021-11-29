@@ -6,6 +6,10 @@
 #
 
 #------------------------------------------------------------------------------
+
+get_img(cam::Camera) = getfield(cam, :img_buf)
+get_ts(cam::Camera) = getfield(cam, :ts)
+
 #==
     Configuration functions
 ==#
@@ -174,7 +178,7 @@ function set_reverse(camera::Camera, reverse_dir::Symbol)
     setValue(ReverseNode,true)
 end
 
-
+#---
 #==
     CAMEARA OPERATION
 ==#
@@ -264,31 +268,30 @@ for (jl_func, c_func) in ((:isinitialized, :spinCameraIsInitialized),
     end
 end
 
-
 """
-    Acquisition
+    Camera operations
+
+    work
+    stop
+    abor
+    configure
+""" Camera_operations
+"""
+    Work
     create image buffer, and start image acquisition.
-""" beginCameraAcquisition
-#==
-function beginCameraAcquisition(camera::Camera, imgConfig::ImageConfigContext ; nbufs::Integer = 2)
-
-    # allocate image buffer
-    camAcquisitionBuffer =fill!(Vector{Array{UInt8,2}}(undef, nbufs),zeros(imgConfig.height,imgConfig.width))
-
+""" work
+working(camera::Camera, c::Channel{DataPack}) = @async work(camera,c)
+function work(camera::Camera, c::Channel{DataPack})
     # set acquisition mode
     set_acquisitionmode(camera, "Continuous")
-
-    # config the camera
-    set_exposuretime(camera, imgConfig.exposuretime)
-    set_gain(camera, imgConfig.gainvalue)
-    # set_reverse(img.Config.)
 
     # begin acquisition
     @info "start acquisition loop"
     start(camera)
     counter = 1
+    pack = DataPack()
     while true
-
+        #get image
         img =
         try
             SpinnakerCameras.next_image(camera, 1)
@@ -299,25 +302,63 @@ function beginCameraAcquisition(camera::Camera, imgConfig::ImageConfigContext ; 
             end
             nothing
         end
-
+        @info "got image"
+        #put data
         img.incomplete != 1 ||  @goto clear_img
         img.status == 0     ||  @goto clear_img
 
-            ind = (counter-1)%nbufs + 1
-            copyto!(camAcquisitionBuffer[ind], img.data)
-            counter +=1
+        # slow? FIXME
+        ts = img.timestamp
+
+        # nano = convert(Int64,ts%1e9)
+        # sec = convert(Int64,(ts%1e10 - nano) ÷ 1e9)
+        img_data = @view img.data[:,:]
+
+        pack.img = img_data
+        pack.ts = ts
+
+        # pack.ts = HighResolutionTime(sec,nano)
+        pack.numID = counter
+
+        #blocking until the previous datapack is taken
+        # while !isempty(c)
+        #
+        # end
+        put!(c,pack)
+        @info "sent $counter.."
+        counter +=1
 
         @label clear_img
             finalize(img)
 
-
     end
 
 end
-==#
+"""
+    stopping
+""" stopping
+
+stopping(camera::Camera) = stop(camera)
 
 """
-    SpinnakerCameras.reset(camera)
+    aborting
+""" aborting
+aborting(camera::Camera) = stop(camera)
+
+
+"""
+    configuring
+""" configuring
+
+function configuring(camera::Camera, conf::ImageConfigContext)
+
+
+end
+
+
+#--- Camera utils
+"""
+SpinnakerCameras.reset(camera)
     Power cycle the device. The device needs to be rediscovered
 
 """ reset

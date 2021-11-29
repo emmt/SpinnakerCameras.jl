@@ -7,7 +7,7 @@ modeStr = "SingleFrame"
 imageSize = (500, 350)
 
 # Exposure
-exposure_time = 10.0
+exposure_time = 100.0
 
 
 system = SpinnakerCameras.System()
