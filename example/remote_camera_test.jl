@@ -29,6 +29,7 @@ SpinnakerCameras.create_monitor_shared_object!(SpinnakerCameras.SharedObject,rem
 shcam_monitor = SpinnakerCameras.SharedCameraMonitor(SpinnakerCameras.default_p_list_sh)
 SpinnakerCameras.create_monitor_shared_object!(SpinnakerCameras.SharedObject,shcam_monitor)
 
+
 #--- listening
 # 1. broadcasting shmid of cmds, state, img, imgBuftime, remote camera monitor
 cmds_shmid = SpinnakerCameras.get_shmid(SpinnakerCameras.cmds(remotecam_monitor))

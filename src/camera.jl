@@ -286,9 +286,11 @@ function work(camera::Camera, c::Channel{DataPack})
     set_acquisitionmode(camera, "Continuous")
 
     # begin acquisition
-    @info "start acquisition loop"
+    thr_id = Threads.threadid()
+    @info "start acquisition loop thread id = $thr_id "
+
     start(camera)
-    counter = 1
+    counter = 0
     pack = DataPack()
     while true
         #get image
@@ -296,16 +298,19 @@ function work(camera::Camera, c::Channel{DataPack})
         try
             SpinnakerCameras.next_image(camera, 1)
         catch ex
+            @warn "image corrupted"
             if (!isa(ex, SpinnakerCameras.CallError) ||
                 ex.code != SpinnakerCameras.SPINNAKER_ERR_TIMEOUT)
                 rethrow(ex)
             end
             nothing
         end
-        @info "got image"
+        # @info "got image"
         #put data
-        img.incomplete != 1 ||  @goto clear_img
-        img.status == 0     ||  @goto clear_img
+        if img.incomplete == 1 && img.status != 0
+           @goto clear_img
+       end
+        counter +=1
 
         # slow? FIXME
         ts = img.timestamp
@@ -321,12 +326,10 @@ function work(camera::Camera, c::Channel{DataPack})
         pack.numID = counter
 
         #blocking until the previous datapack is taken
-        # while !isempty(c)
-        #
-        # end
+        while !isempty(c)
+        end
         put!(c,pack)
-        @info "sent $counter.."
-        counter +=1
+        @info "image $counter sent .."
 
         @label clear_img
             finalize(img)

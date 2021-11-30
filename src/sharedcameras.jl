@@ -220,37 +220,27 @@ setproperty!(remoteCam::RemoteCamera, sym::Symbol, val) =
 #     RemoteCamera{T}(attach(SharedCamera, srv))
 
 #--- Abstract Monitor property
-propertynames(monitor::RemoteCameraMonitor) = ( :lock,
-                                            :cmds,
+propertynames(monitor::RemoteCameraMonitor) = (
                                             :shmid,
-                                            :fetch_index,
-                                            :release_counter,
-
+                                            :cmds,
+                                            :state,
+                                            :procedures,
+                                            :lock,
                                             :empty_cmds,
-                                            :wait_to_fetch,
-                                            :fetch_index_updated,
-                                            :fetch_index_read,
+                                            :state_updating    )
 
-                                            :procedures)
-
-getproperty(monitor::RemoteCameraMonitor, sym::Symbol) = getproperty(monitor, Val(sym))
+getproperty(monitor::AbstractMonitor, sym::Symbol) = getproperty(monitor, Val(sym))
 
 getproperty(monitor::RemoteCameraMonitor, ::Val{:cmds}) = getfield(monitor, :cmds)
 getproperty(monitor::RemoteCameraMonitor, ::Val{:state}) = getfield(monitor, :state)
-getproperty(monitor::RemoteCameraMonitor, ::Val{:fetch_index}) = getfield(monitor, :fetch_index)
-getproperty(monitor::RemoteCameraMonitor, ::Val{:release_counter}) = getfield(monitor, :release_counter)
-
-getproperty(monitor::RemoteCameraMonitor, ::Val{:lock}) = getfield(monitor, :lock)
-getproperty(monitor::RemoteCameraMonitor, ::Val{:empty_cmds}) = getfield(monitor, :empty_cmds)
-getproperty(monitor::RemoteCameraMonitor, ::Val{:wait_to_fetch}) = getfield(monitor, :wait_to_fetch)
-getproperty(monitor::RemoteCameraMonitor, ::Val{:fetch_index_updated}) = getfield(monitor, :fetch_index_updated)
-getproperty(monitor::RemoteCameraMonitor, ::Val{:fetch_index_read}) = getfield(monitor, :fetch_index_read)
-
-
 getproperty(monitor::RemoteCameraMonitor, ::Val{:procedures}) = getfield(monitor, :procedures)
+getproperty(monitor::RemoteCameraMonitor, ::Val{:lock}) = getfield(monitor, :lock)
 
 getproperty(monitor::RemoteCameraMonitor, ::Val{:shmid}) =
-    ccall((:tao_get_shared_data_shmid, taolib), ShmId,(Ptr{AbstractSharedObject},), monitor)
+ccall((:tao_get_shared_data_shmid, taolib), ShmId,(Ptr{AbstractSharedObject},), monitor)
+
+getproperty(monitor::RemoteCameraMonitor, ::Val{:empty_cmds}) = getfield(monitor, :empty_cmds)
+getproperty(monitor::RemoteCameraMonitor, ::Val{:state_updating}) = getfield(monitor, :state_updating)
 
 
 
@@ -261,51 +251,62 @@ propertynames(monitor::SharedCameraMonitor) = (
                                                 :completion,
                                                 :image_counter,
                                                 :procedures,
+                                                :lock,
                                                 :no_cmd,
                                                 :not_started,
-                                                :state_updating,
-                                                :not_complete,
-                                                :lock,)
+                                                :not_complete)
 
-    getproperty(monitor::SharedCameraMonitor, sym::Symbol) = getproperty(monitor, Val(sym))
 
-    getproperty(monitor::SharedCameraMonitor, ::Val{:cmd}) = getfield(monitor, :cmd)
-    getproperty(monitor::SharedCameraMonitor, ::Val{:start_status}) = getfield(monitor, :start_status)
-    getproperty(monitor::SharedCameraMonitor, ::Val{:completion}) = getfield(monitor, :completion)
+getproperty(monitor::SharedCameraMonitor, ::Val{:cmd}) = getfield(monitor, :cmd)
+getproperty(monitor::SharedCameraMonitor, ::Val{:start_status}) = getfield(monitor, :start_status)
+getproperty(monitor::SharedCameraMonitor, ::Val{:completion}) = getfield(monitor, :completion)
+getproperty(monitor::SharedCameraMonitor, ::Val{:image_counter}) = getfield(monitor, :image_counter)
+getproperty(monitor::SharedCameraMonitor, ::Val{:procedures}) = getfield(monitor, :procedures)
+getproperty(monitor::SharedCameraMonitor, ::Val{:lock}) = getfield(monitor, :lock)
 
-    getproperty(monitor::SharedCameraMonitor, ::Val{:image_counter}) = getfield(monitor, :image_counter)
-    getproperty(monitor::SharedCameraMonitor, ::Val{:no_cmd}) = getfield(monitor, :no_cmd)
-    getproperty(monitor::SharedCameraMonitor, ::Val{:state_updating}) = getfield(monitor, :state_updating)
-    getproperty(monitor::SharedCameraMonitor, ::Val{:not_started}) = getfield(monitor, :not_started)
-    getproperty(monitor::SharedCameraMonitor, ::Val{:not_complete}) = getfield(monitor, :not_complete)
+getproperty(monitor::SharedCameraMonitor, ::Val{:shmid}) =
+    ccall((:tao_get_shared_data_shmid, taolib), ShmId,(Ptr{AbstractSharedObject},), monitor)
 
-    getproperty(monitor::SharedCameraMonitor, ::Val{:procedures}) = getfield(monitor, :procedures)
-    getproperty(monitor::SharedCameraMonitor, ::Val{:lock}) = getfield(monitor, :lock)
+getproperty(monitor::SharedCameraMonitor, ::Val{:no_cmd}) = getfield(monitor, :no_cmd)
+getproperty(monitor::SharedCameraMonitor, ::Val{:not_started}) = getfield(monitor, :not_started)
+getproperty(monitor::SharedCameraMonitor, ::Val{:not_complete}) = getfield(monitor, :not_complete)
 
-    getproperty(monitor::SharedCameraMonitor, ::Val{:shmid}) =
-        ccall((:tao_get_shared_data_shmid, taolib), ShmId,(Ptr{AbstractSharedObject},), monitor)
+propertynames(monitor::DataMonitor) = ( :lock,
+                                        :fetch_index,
+                                        :release_counter,
+                                        :procedures,
+
+                                        :wait_to_fetch,
+                                        :fetch_index_updated,
+                                        :fetch_index_read)
+
+getproperty(monitor::DataMonitor, ::Val{:lock}) = getfield(monitor, :lock)
+
+getproperty(monitor::DataMonitor, ::Val{:fetch_index}) = getfield(monitor, :fetch_index)
+getproperty(monitor::DataMonitor, ::Val{:release_counter}) = getfield(monitor, :release_counter)
+getproperty(monitor::DataMonitor, ::Val{:procedures}) = getfield(monitor, :procedures)
+
+getproperty(monitor::DataMonitor, ::Val{:wait_to_fetch}) = getfield(monitor, :wait_to_fetch)
+getproperty(monitor::DataMonitor, ::Val{:fetch_index_updated}) = getfield(monitor, :fetch_index_updated)
+getproperty(monitor::DataMonitor, ::Val{:fetch_index_read}) = getfield(monitor, :fetch_index_read)
+
 #--- Accessors.
 camera(cam::RemoteCamera) = cam
 camera(cam::SharedCamera) = cam
 device(cam::RemoteCamera) = getfield(cam, :device)
 device(cam::SharedCamera,i::Int64) = cam.cameras[i]
 eltype(::AbstractCamera{T}) where {T} = T
-cmds(monitor::AbstractMonitor) = begin
+cmds(monitor::RemoteCameraMonitor) = begin
                                     rdlock(monitor.cmds,0.5) do
                                         monitor.cmds
                                     end
                                 end
-state(monitor::AbstractMonitor) = begin
+state(monitor::RemoteCameraMonitor) = begin
                                     rdlock(monitor.state,0.5) do
                                         monitor.state
                                     end
                                 end
 
-release_counter(monitor::AbstractMonitor) = begin
-                                    rdlock(monitor.release_counter,0.5) do
-                                        monitor.release_counter[1]
-                                    end
-                                end
 
 show(io::IO, cam::RemoteCamera{T}) where {T} =
     print(io, "RemoteCamera{$T}(owner=\"", cam.owner,")")
@@ -316,6 +317,22 @@ show(io::IO, cam::RemoteCamera{T}) where {T} =
 iterate(cam::AbstractCamera, ::Union{Nothing,Tuple{Any,Any}}=nothing) =
                 (timedwait(cam, 30.0), nothing)
 
+thread_safe_wait(r::Condition) = begin
+                                lock(r)
+                                try
+                                  wait(r)
+                                finally
+                                  unlock(r)
+                                end
+                              end
+thread_safe_notify(r::Condition) = begin
+                                lock(r)
+                                try
+                                  wait(r)
+                                finally
+                                  unlock(r)
+                                end
+                              end
 #--- create functions
 function create(::Type{SharedCamera}; owner::AbstractString = default_owner(),
                 perms::Integer = 0o600)
@@ -398,10 +415,13 @@ sort_next_state(cmd::RemoteCameraCommand, shcam_sig::ShCamSIG) = sort_next_state
 
 updating_shcam_cmd(shcam::SharedCamera,monitorSC::SharedCameraMonitor,
                    remcam::RemoteCamera, monitorRC::RemoteCameraMonitor) =
-                        @async _updating_shcam_cmd(shcam,monitorSC,remcam,monitorRC)
+                        @spawn _updating_shcam_cmd(shcam,monitorSC,remcam,monitorRC)
 
 function _updating_shcam_cmd(shcam::SharedCamera,monitorSC::SharedCameraMonitor,
                               remcam::RemoteCamera, monitorRC::RemoteCameraMonitor)
+
+    thr_id = Threads.threadid()
+    @info "shcam thread id = $thr_id"
     while true
         wait(monitorSC.no_cmd)
         cmd = rdlock(monitorSC,0.5) do
@@ -414,7 +434,7 @@ function _updating_shcam_cmd(shcam::SharedCamera,monitorSC::SharedCameraMonitor,
             monitorSC.procedures[7](monitorSC)
         end
 
-        @info "ShCam monitor is on standby...\n"
+        # @info "ShCam monitor is on standby...\n"
     end
 end
 
@@ -423,15 +443,27 @@ end
     SpinnakerCameras.listening()
     Does command and state updates on the Remotecamera
 """ listening
-function _listening(monitorRC::RemoteCameraMonitor, monitorSC::SharedCameraMonitor)
+listening(monitorRC::RemoteCameraMonitor, monitorSC::SharedCameraMonitor) = begin
+                                              try
+                                                 addproc()
+                                                 @spawn _listening(monitorRC,monitorSC)
+                                               catch ex
+                                                 @error ex
+                                               end
+                                          end
 
+function _listening(monitorRC::RemoteCameraMonitor, monitorSC::SharedCameraMonitor)
+    thr_id = Threads.threadid()
+    println(" listening thread id = $thr_id")
     while true
         @label start
-        rdlock(monitorRC)
-        if iscmdempty(monitorRC)
+        emp =  rdlock(monitorRC,1) do
+          iscmdempty(monitorRC)
+        end
+        if emp
             @info "RemoteCamera is on standby"
-            unlock(monitorRC)
-            wait(monitorRC.empty_cmds)
+            thread_safe_wait(monitorRC.empty_cmds)
+
         end
         # read cmd and current state
         cmd, current_state = rdlock(monitorRC,0) do
@@ -444,7 +476,7 @@ function _listening(monitorRC::RemoteCameraMonitor, monitorSC::SharedCameraMonit
 
         end
         # check response
-        wait(monitorSC.not_started)
+        thread_safe_wait(monitorSC.not_started)
 
         shcam_response = rdlock(monitorSC,0.5) do
             monitorSC.start_status
@@ -460,59 +492,27 @@ function _listening(monitorRC::RemoteCameraMonitor, monitorSC::SharedCameraMonit
 
         # figure out state to write
         state_to_write = sort_next_state(cmd,current_state)
-
+        @info "next state $state_to_write"
         # update the state and push the cmds
         wrlock(monitorRC,0.5) do
             monitorRC.procedures[4](monitorRC,state_to_write)
             monitorRC.procedures[5](monitorRC)
         end
-        notify(monitorSC.state_updating)
-
+        thread_safe_notify(monitorRC.state_updating)
+        # @info "update state after start"
         # wait the shared camera to signal is completion
-        wait(monitorSC.not_complete)
+        thread_safe_wait(monitorSC.not_complete)
         completion = rdlock(monitorSC,1) do
             monitorSC.completion
         end
         state_to_write = sort_next_state(cmd, completion)
-
+        # @info "next state $state_to_write"
         wrlock(monitorRC,0.5) do
             monitorRC.procedures[4](monitorRC,state_to_write)
         end
 
     end
 
-end
-
-listening(monitorRC::RemoteCameraMonitor, monitorSC::SharedCameraMonitor) = @async _listening(monitorRC,monitorSC)
-
-
-"""
-    SpinnakerCameras.fetching()
-    fetches data from RemoteCamera arrays to RemoteCamera buffers
-""" fetching
-fetching(remcam::RemoteCamera, monitorRC::RemoteCameraMonitor) = @async _fetching(
-                                                                        remcam,
-                                                                        monitorRC
-                                                                        )
-
-function _fetching(remcam::RemoteCamera, monitorRC::RemoteCameraMonitor)
-    first_loop = true
-    timeout = 0.5
-    while true
-        # FIXME critical section: bottom neck suspected
-        # first loop skip waiting
-
-        if first_loop
-          @info "first fetching"
-          fetch_from_array(remcam,monitorRC,timeout)
-          first_loop = false
-        else
-          wait(monitorRC.fetch_index_updated)
-          fetch_from_array(remcam,monitorRC,timeout)
-
-        end
-
-    end
 end
 
 
@@ -523,48 +523,94 @@ end
     Grab data from camera and put in RemoteCamera Arrays
 """ grabbing
 grabbing(c_buff::Channel{DataPack},shcam::SharedCamera,
-          remCam::RemoteCamera,monitorRC::RemoteCameraMonitor) = @async _grabbing(c_buff,shcam,remCam,monitorRC)
+          remcam::RemoteCamera,monitorRC::RemoteCameraMonitor,
+           monitorDT::DataMonitor) = begin
 
-function _grabbing(c_buff::Channel{DataPack},shcam::SharedCamera,remCam::RemoteCamera, monitorRC::RemoteCameraMonitor)
+                  try
+                      @spawn _grabbing(c_buff,shcam,remcam,monitorRC,monitorDT)
+                    catch ex
+                      @error ex
+                    end
+                  end
+
+function _grabbing(c_buff::Channel{DataPack},shcam::SharedCamera,remcam::RemoteCamera,
+                    monitorRC::RemoteCameraMonitor, monitorDT::DataMonitor)
 
       buff_length = shcam.listlength
       signaling_fetching = true
-
-      @info "start grabbing loop"
+      thr_id = Threads.threadid()
+      @info "start grabbing loop thread id = $thr_id"
       while true
         if isempty(c_buff)
-          wait(c_buff)
+          thread_safe_wait(c_buff)
         end
+        # @info "grabbing data"
         data_pack = take!(c_buff)
         (img, ts, id) = unpack(data_pack)
-        ind_array = fecth_lastest_index(id+1, Int64(buff_length))
-
-        # lock remote camera
-
-        copyto!(remCam.arrays[ind_array], img)
-        remCam.timestamps[ind_array] = ts
-
+        ind_array = fecth_lastest_index(id, Int64(buff_length))
+        println("id = $id")
+        # lock data monitor
+        wrlock(monitorDT,1.0) do
+          copyto!(remcam.arrays[ind_array], img)
+          remcam.timestamps[ind_array] = ts
+        end
         # FIXME critical section: bottom neck suspected
 
         # start fetch
         if signaling_fetching
-          notify(monitorRC.wait_to_fetch)
+          thread_safe_notify(monitorDT.wait_to_fetch)
           signaling_fetching = false
         end
 
-        wait(monitorRC.fetch_index_read)
-        try
-          wrlock(monitorRC,0.5) do
-              monitorRC.fetch_index = ind_array
-              notify(monitorRC.fetch_index_updated)
-          end
-        catch ex
-          println(ex)
+        thread_safe_wait(monitorDT.fetch_index_read)
+
+        wrlock(monitorDT,0.5) do
+            monitorDT.procedures[2](monitorDT,ind_array)
+            thread_safe_notify(monitorDT.fetch_index_updated)
         end
+
         @info "updated index to $ind_array .."
 
     end
 end
+
+
+"""
+    SpinnakerCameras.fetching()
+    fetches data from RemoteCamera arrays to RemoteCamera buffers
+""" fetching
+fetching(remcam::RemoteCamera, monitorRC::RemoteCameraMonitor,
+          monitorDT::DataMonitor) = begin
+          try
+            @spawn _fetching(remcam, monitorRC,monitorDT)
+          catch ex
+            @error ex
+          end
+        end
+
+
+function _fetching(remcam::RemoteCamera, monitorRC::RemoteCameraMonitor, monitorDT::DataMonitor)
+    first_loop = true
+    timeout = 0.5
+    thr_id = Threads.threadid()
+    while true
+        # FIXME critical section: bottom neck suspected
+        # first loop skip waiting
+
+        if first_loop
+          @info "first fetching thread id = $thr_id"
+          fetch_from_array(remcam,monitorRC,monitorDT,timeout)
+          first_loop = false
+        else
+          thread_safe_wait(monitorDT.fetch_index_updated)
+          fetch_from_array(remcam,monitorRC,monitorDT,timeout)
+
+        end
+
+    end
+end
+
+
 
 
 ## attach extension
@@ -605,9 +651,9 @@ for (cmd, cam_op) in (
     function next_camera_operation(::Val{$cmd}, shcam::SharedCamera,
                         monitorSC::SharedCameraMonitor, remcam::RemoteCamera,monitorRC::RemoteCameraMonitor)
         try
-            cameraTask = @async $cam_op(shcam, monitorSC,remcam , monitorRC)
+            cameraTask = @spawn $cam_op(shcam, monitorSC,remcam , monitorRC)
             str_op = $cam_op
-            @info "Executed  $str_op \n"
+            # @info "Executed  $str_op \n"
         catch ex
             if !isa(ex, SpinnakerCameras.CallError)
                 rethrow(ex)
@@ -627,7 +673,7 @@ for (cmd, cam_op) in (
         end
 
         return_val =  true
-        notify(monitorSC.not_started)
+        thread_safe_notify(monitorSC.not_started)
         return return_val
     end
 end
@@ -644,13 +690,13 @@ init(shcam::SharedCamera, monitorSC::SharedCameraMonitor,
         wrlock(monitorSC,0.5) do
             monitorSC.completion = SIG_DONE
         end
-        wait(monitorSC.state_updating)
-        notify(monitorSC.not_complete)
+        thread_safe_wait(monitorRC.state_updating)
+        thread_safe_notify(monitorSC.not_complete)
     catch ex
         wrlock(monitorSC,0.5) do
             monitorSC.completion = SIG_ERROR
         end
-        notify(monitorSC.not_complete)
+        thread_safe_notify(monitorSC.not_complete)
         rethrow(ex)
     end
     nothing
@@ -666,15 +712,17 @@ start(shcam::SharedCamera,  monitorSC::SharedCameraMonitor,
 
     camera = device(shcam,1)
     img_buffer = Channel{DataPack}(1)
+    monitorDT =  DataMonitor(default_p_list_data)
+    create_monitor_shared_object!(SharedObject,monitorDT)
 
     # start working thread
     working(camera,img_buffer)
-      @info "working starts"
+      # @info "working starts"
 
     try
         # start grabbing
-        grabbing(img_buffer,shcam, remcam, monitorRC)
-        @info "grabbing starts"
+        grabbing(img_buffer,shcam, remcam, monitorRC,monitorDT)
+        # @info "grabbing starts"
       catch ex
         println(ex)
         @warn "failed at grabbing"
@@ -682,24 +730,24 @@ start(shcam::SharedCamera,  monitorSC::SharedCameraMonitor,
 
       try
         # start fetching
-        wait(monitorRC.wait_to_fetch)
-        fetching(remcam, monitorRC)
-        @info "fetching starts"
+        thread_safe_wait(monitorDT.wait_to_fetch)
+        fetching(remcam, monitorRC,monitorDT)
+        # @info "fetching starts"
 
       catch ex
         @warn "error with start"
         wrlock(monitorSC,0.5) do
             monitorSC.completion = SIG_ERROR
         end
-        notify(monitorSC.not_complete)
+        thread_safe_notify(monitorSC.not_complete)
         throw(ex)
     end
-
-    wait(monitor.state_updating)
+    # @info "wait state update"
+    thread_safe_wait(monitorRC.state_updating)
     wrlock(monitorSC,0.5) do
         monitorSC.completion = SIG_DONE
     end
-    notify(monitor.not_complete)
+    thread_safe_notify(monitorSC.not_complete)
     @info "start is DONE"
     nothing
 end
@@ -787,14 +835,14 @@ end
 
 """
 function fetch_from_array(remcam::RemoteCamera, monitorRC:: RemoteCameraMonitor,
-                          timeout::Float64)
+                          monitorDT::DataMonitor, timeout::Float64)
     # retrieve the index in the array to be fetch
 
-      ind = rdlock(monitorRC,timeout) do
-          convert(Int64,monitorRC.fetch_index)
+      ind = rdlock(monitorDT,timeout) do
+          monitorDT.fetch_index
       end
 
-    notify(monitorRC.fetch_index_read)
+    thread_safe_notify(monitorDT.fetch_index_read)
     @info "index $ind is read..."
 
     # put data in the acquisition buffer
@@ -808,8 +856,8 @@ function fetch_from_array(remcam::RemoteCamera, monitorRC:: RemoteCameraMonitor,
       end
 
       # increment release counter
-      wrlock(monitorRC,timeout) do
-          inc_release_counter!(monitorRC)
+      wrlock(monitorDT,timeout) do
+          monitorDT.procedures[4](monitorDT)
       end
     catch ex
       println(ex)

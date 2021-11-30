@@ -324,22 +324,38 @@ _to_Cint(sig::ShCamSIG) = sig.sig
 
 abstract type AbstractMonitor end
 
+
+"""
+    Command and state procedures
+    |       Listening               |            Updating           |
+    |_______________________________|_______________________________|
+    |       wait: empty_cmds        |       wait: no_cmd            |
+    |       cmds are read           |                               |
+    |       cmds[1] is sent         |       read cmd                |
+    |                               |       next_camera_operation   |
+    |                               |       wait: not_started       |
+    |                               |next_camera_operation: SIG_OK  |
+    |      update state             |     wait: state_updating      |
+    |      push cmds                |                               |
+    |      wait: not_complete       |  cam_op notifies before quit  |
+    |      update state             |                               |
+    |                               |                               |
+
+
+"""
 mutable struct RemoteCameraMonitor <: AbstractMonitor
     ptr::Ptr{AbstractSharedObject}  # to access mutex lock capability only
     final::Bool
 
     cmds::SharedArray{Cint,1}
     state::SharedArray{Cint,1}
-    fetch_index::Int64
-    release_counter::Int64
     procedures::Vector{Function}
-
-    empty_cmds::Condition
-    wait_to_fetch::Condition
-    fetch_index_updated::Condition
-    fetch_index_read::Condition
-
     lock::LockMode
+
+    #left (client)
+    empty_cmds::Condition
+    # right (shared camera)
+    state_updating::Condition
 
     function RemoteCameraMonitor(p_list::Vector{Function})
         # check the condition of th eprocedure list
@@ -356,7 +372,7 @@ mutable struct RemoteCameraMonitor <: AbstractMonitor
             fill!(state,-1)
         end
 
-         return new(C_NULL,false,cmds, state,1, 1,p_list,Condition(), Condition(),Condition(),Condition(),UNLOCKED )
+         return new(C_NULL,false,cmds, state,p_list,UNLOCKED, Condition(), Condition() )
     end
 
 end
@@ -411,16 +427,19 @@ end
 function monitor_clear_state!(monitor::RemoteCameraMonitor)
     monitor.state[1] = -1
 end
-read_rcounter(monitor::RemoteCameraMonitor) = monitor.release_counter
-
-inc_rcounter!(monitor::RemoteCameraMonitor) = monitor.release_counter+1
 
 const default_P_list =[ monitor_read_cmd,   monitor_write_cmd!,
                         monitor_read_state, monitor_write_state!,
                         monitor_push_cmd!,  monitor_clear_state!    ]
 
-
 ##
+"""
+    Command execution steps
+    1. no_cmd: wait for cmd to be sent the the shared camera
+    2. not_started: camera operation has not started
+    3. not_complete: camera operation has started , but is still working
+
+"""
 mutable struct SharedCameraMonitor <: AbstractMonitor
     ptr::Ptr{AbstractSharedObject}  # to access mutex lock capability only
     final::Bool
@@ -433,14 +452,13 @@ mutable struct SharedCameraMonitor <: AbstractMonitor
 
     no_cmd::Condition
     not_started::Condition
-    state_updating::Condition
     not_complete::Condition
 
     lock::LockMode
 
     SharedCameraMonitor(p_list::Vector{Function}) = new(C_NULL,false,
     RemoteCameraCommand(-1), ShCamSIG(-1),ShCamSIG(-1),0, p_list,Condition(),
-    Condition(),Condition(),Condition(),UNLOCKED )
+    Condition(),Condition(),UNLOCKED )
 
 end
 
@@ -486,6 +504,41 @@ const default_p_list_sh = [ monitor_read_cmd,           monitor_write_cmd!,
                             monitor_read_completion,    monitor_write_completion!,
                             monitor_reset_cmd!  ]
 
+"""
+    DataMonitor: Monitor for Putting Data into RemoteCamera arrays and
+    RemoteCamera acquisition buffer. Syncing grabbing and fecthing
+    --------------------------------------------
+    |       grabber     |       fetcher     |
+        put -> fetch_index -> take
+
+    fetch_index_updated     fetch_index_read
+
+"""
+mutable struct DataMonitor <: AbstractMonitor
+    ptr::Ptr{AbstractSharedObject}  # to access mutex lock capability only
+    final::Bool
+    lock::LockMode
+    procedures::Vector{Function}
+    wait_to_fetch::Condition
+
+    fetch_index::Int64
+    fetch_index_updated::Condition
+    fetch_index_read::Condition
+
+    release_counter::Int64
+
+    DataMonitor(p_list::Vector{Function}) = new(C_NULL,false, UNLOCKED, p_list,
+                                        Condition(),1,Condition(),Condition(), 1)
+end
+
+monitor_read_fetch_index(monitor::DataMonitor) = monitor.fetch_index
+monitor_set_fetch_index!(monitor::DataMonitor, val::Int64) = setfield!(monitor,:fetch_index,val)
+monitor_read_rcounter(monitor::DataMonitor) = monitor.release_counter
+monitor_inc_rcounter!(monitor::DataMonitor) = begin
+                                            monitor.release_counter += 1
+                                            end
+const default_p_list_data = [ monitor_read_fetch_index, monitor_set_fetch_index!,
+                              monitor_read_rcounter , monitor_inc_rcounter!      ]
 
 """
 
@@ -495,7 +548,7 @@ read/write locks.  Methods [`TaoBindings.rdlock`](@ref),
 [`TaoBindings.islocked`](@ref) are applicable to such objects.
 
 """
-const Lockable = Union{AbstractSharedObject,SharedArray,AbstractMonitor,RemoteCamera, SharedCamera}
+const Lockable = Union{AbstractSharedObject,SharedArray,AbstractMonitor, SharedCamera}
 
 
 """

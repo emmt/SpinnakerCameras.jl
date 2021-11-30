@@ -11,6 +11,7 @@ using Printf
 using Images
 
 using Base: @propagate_inbounds
+using Base.Threads: @spawn, Condition
 import Base:
     VersionNumber,
     axes,
