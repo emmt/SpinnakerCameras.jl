@@ -86,7 +86,7 @@ for T in (:System, :Camera, :CameraList, :Interface, :InterfaceList,
         const $(Symbol(T,"Handle")) = Ptr{$(Symbol("Opaque",T))}
     end
 end
-
+# _to_str(pixel::) =
 @enum PixelFormat::Int32 begin
    PixelFormat_Mono8
    PixelFormat_Mono16
@@ -350,10 +350,10 @@ SensorShutterMode = Dict(1=>"Global",
 
 mutable struct ImageConfigContext
     # goes to spinImageCreate
-    width::Int32
-    height::Int32
-    offsetX::Int32
-    offsetY::Int32
+    width::Int64
+    height::Int64
+    offsetX::Int64
+    offsetY::Int64
     pixelformat::PixelFormat
 
     # goes to camera
@@ -366,7 +366,7 @@ mutable struct ImageConfigContext
         max_width = 2048
         max_height = 1536
         return new(max_width, max_height, 0, 0,PixelFormat_Mono8,
-                    10.0, 10.0, false, false)
+                    10.0, 100.0, false, false)
     end
 end
 

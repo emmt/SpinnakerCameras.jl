@@ -121,6 +121,7 @@ for sym in (
                                     setfield!(dev,Symbol($_sym),Int16(val))
 end
 
+set_img_config(shcam::SharedCamera, conf::ImageConfigContext) = setfield!(shcam,:img_config,conf)
 #--- RemoteCamera property
 
 propertynames(cam::RemoteCamera) =
@@ -131,7 +132,7 @@ propertynames(cam::RemoteCamera) =
       :imgTime,
       :cmds,
       :time_origin,
-
+      :no_cmds,
       # SharedCamera
       :owner,
       :shmid,
@@ -191,9 +192,11 @@ getproperty(remoteCam::RemoteCamera,sym::Symbol) = getproperty(remoteCam, Val(sy
 for sym in (:timestamps,
             :img,
             :imgTime,
+            :cmds,
             :shmids,
             :arrays,
             :device,
+            :no_cmds,
             :time_origin)
     _sym = "$sym"
     @eval getproperty(remoteCam::RemoteCamera,::$(Val{sym})) =
@@ -317,22 +320,7 @@ show(io::IO, cam::RemoteCamera{T}) where {T} =
 iterate(cam::AbstractCamera, ::Union{Nothing,Tuple{Any,Any}}=nothing) =
                 (timedwait(cam, 30.0), nothing)
 
-thread_safe_wait(r::Condition) = begin
-                                lock(r)
-                                try
-                                  wait(r)
-                                finally
-                                  unlock(r)
-                                end
-                              end
-thread_safe_notify(r::Condition) = begin
-                                lock(r)
-                                try
-                                  wait(r)
-                                finally
-                                  unlock(r)
-                                end
-                              end
+
 #--- create functions
 function create(::Type{SharedCamera}; owner::AbstractString = default_owner(),
                 perms::Integer = 0o600)
@@ -365,7 +353,7 @@ function create_monitor_shared_object!(::Type{SharedObject},monitor::AbstractMon
 
         return monitor
 end
-
+## Camera util functions
 function register(dev::SharedCamera, cam::Camera)
     inc_attachedCam(dev)
     try
@@ -377,7 +365,7 @@ end
 
 
 function broadcast_shmids(shmids::Vector{ShmId})
-    fname = "shmid.txt"
+    fname = "shmids.txt"
     path = "/tmp/SpinnakerCameras/"
     open(path*fname,"w") do f
         for shmid in shmids
@@ -385,7 +373,11 @@ function broadcast_shmids(shmids::Vector{ShmId})
         end
     end
 end
-#--- Server
+
+
+
+
+#--- Command and state mapper
 
 for (cmd, now_state, next_state) in (
         (:CMD_INIT,  :STATE_UNKNOWN   ,   STATE_INIT),
@@ -409,208 +401,86 @@ for (sig, cmd, next_state) in (
 
     @eval sort_next_state(::Val{$cmd}, ::Val{$sig}) = $next_state
 end
-# util functions
+
 sort_next_state(cmd::RemoteCameraCommand, current_state::RemoteCameraState) = sort_next_state(Val(cmd), Val(current_state))
 sort_next_state(cmd::RemoteCameraCommand, shcam_sig::ShCamSIG) = sort_next_state(Val(cmd), Val(shcam_sig))
 
-updating_shcam_cmd(shcam::SharedCamera,monitorSC::SharedCameraMonitor,
-                   remcam::RemoteCamera, monitorRC::RemoteCameraMonitor) =
-                        @spawn _updating_shcam_cmd(shcam,monitorSC,remcam,monitorRC)
 
-function _updating_shcam_cmd(shcam::SharedCamera,monitorSC::SharedCameraMonitor,
-                              remcam::RemoteCamera, monitorRC::RemoteCameraMonitor)
+thread_safe_wait(r::Condition) = begin
+                                lock(r)
+                                try
+                                  wait(r)
+                                finally
+                                  unlock(r)
+                                end
+                              end
+thread_safe_notify(r::Condition) = begin
+                                lock(r)
+                                try
+                                  wait(r)
+                                finally
+                                  unlock(r)
+                                end
+                              end
+## Listening function
 
-    thr_id = Threads.threadid()
-    @info "shcam thread id = $thr_id"
-    while true
-        wait(monitorSC.no_cmd)
-        cmd = rdlock(monitorSC,0.5) do
-             monitorSC.cmd
-         end
-         # start command
-        next_camera_operation(cmd,shcam,monitorSC,remcam,monitorRC)
-        # reset cmd
-        wrlock(monitorSC,0.5)do
-            monitorSC.procedures[7](monitorSC)
-        end
-
-        # @info "ShCam monitor is on standby...\n"
-    end
-end
-
-
+@inline no_new_cmds(cmds::SharedArray{Cint,1}) = begin
+                        sum(cmds .== -1) == length(cmds)
+                      end
+pop!(cmds::SharedArray{Cint,1}) = begin
+                          val = cmds[1]
+                          cmds[:] = vcat(cmds[2:end],-1)
+                          return val
+                        end
 """
-    SpinnakerCameras.listening()
-    Does command and state updates on the Remotecamera
-""" listening
-listening(monitorRC::RemoteCameraMonitor, monitorSC::SharedCameraMonitor) = begin
-                                              try
-                                                 addproc()
-                                                 @spawn _listening(monitorRC,monitorSC)
-                                               catch ex
-                                                 @error ex
-                                               end
-                                          end
-
-function _listening(monitorRC::RemoteCameraMonitor, monitorSC::SharedCameraMonitor)
-    thr_id = Threads.threadid()
-    println(" listening thread id = $thr_id")
+  Listening
+  1. check cmds written to the shmid
+  2. read the cmds
+  3. start the command
+"""
+listening(shcam::SharedCamera, remcam::RemoteCamera) = @async _listening(shcam, remcam)
+function _listening(shcam::SharedCamera, remcam::RemoteCamera)
+    cmds = remcam.cmds
     while true
-        @label start
-        emp =  rdlock(monitorRC,1) do
-          iscmdempty(monitorRC)
-        end
-        if emp
-            @info "RemoteCamera is on standby"
-            thread_safe_wait(monitorRC.empty_cmds)
+    # check the command
+    @info "wait cmds"
 
-        end
-        # read cmd and current state
-        cmd, current_state = rdlock(monitorRC,0) do
-            monitorRC.procedures[1](monitorRC) , monitorRC.procedures[3](monitorRC)
-        end
+    wait(remcam.no_cmds)
 
-        # sent command to shared camera
-        wrlock(monitorSC,0.5) do
-            monitorSC.procedures[2](monitorSC,cmd)
 
-        end
-        # check response
-        thread_safe_wait(monitorSC.not_started)
-
-        shcam_response = rdlock(monitorSC,0.5) do
-            monitorSC.start_status
-        end
-        if shcam_response != SIG_OK
-            wrlock(monitorRC,0.5) do
-                monitorRC.procedures[4](monitorRC,STATE_ERROR)
-                monitorRC.procedures[5](monitorRC)
-            end
-            @goto start
-
-        end
-
-        # figure out state to write
-        state_to_write = sort_next_state(cmd,current_state)
-        @info "next state $state_to_write"
-        # update the state and push the cmds
-        wrlock(monitorRC,0.5) do
-            monitorRC.procedures[4](monitorRC,state_to_write)
-            monitorRC.procedures[5](monitorRC)
-        end
-        thread_safe_notify(monitorRC.state_updating)
-        # @info "update state after start"
-        # wait the shared camera to signal is completion
-        thread_safe_wait(monitorSC.not_complete)
-        completion = rdlock(monitorSC,1) do
-            monitorSC.completion
-        end
-        state_to_write = sort_next_state(cmd, completion)
-        # @info "next state $state_to_write"
-        wrlock(monitorRC,0.5) do
-            monitorRC.procedures[4](monitorRC,state_to_write)
-        end
-
+    #  read new cmd
+    cmd = rdlock(cmds,0.5) do
+        pop!(cmds)
+    end
+    # sent the command to the camera
+    if next_camera_operation(RemoteCameraCommand(cmd),shcam, remcam)
+      @info "Command successful..."
+    else
+      @info "Command failed..."
     end
 
+  end
 end
 
-
+## image acquisition functios
 @inline unpack(pack::DataPack) = (pack.img, pack.ts, pack.numID)
-@inline fecth_lastest_index(ind_now::Int64, buff_length::Int64) = (ind_now-1)%buff_length+1
 """
     SpinnakerCameras.grabbing()
-    Grab data from camera and put in RemoteCamera Arrays
+    Grab data from camera and put in RemoteCamera Buffer
 """ grabbing
-grabbing(c_buff::Channel{DataPack},shcam::SharedCamera,
-          remcam::RemoteCamera,monitorRC::RemoteCameraMonitor,
-           monitorDT::DataMonitor) = begin
+grabbing(datapack::DataPack,remcam::RemoteCamera) = _grabbing(datapack,remcam)
 
-                  try
-                      @spawn _grabbing(c_buff,shcam,remcam,monitorRC,monitorDT)
-                    catch ex
-                      @error ex
-                    end
-                  end
+function _grabbing(datapack::DataPack,remcam::RemoteCamera)
+      (img, ts, id) = unpack(datapack)
+      id % 50 == 0 && print(id,"..")
+      wrlock(remcam.img,1) do
+        copyto!(remcam.img, img)
+      end
+      wrlock(remcam.imgTime,1) do
+        remcam.imgTime[1] = ts
+      end
 
-function _grabbing(c_buff::Channel{DataPack},shcam::SharedCamera,remcam::RemoteCamera,
-                    monitorRC::RemoteCameraMonitor, monitorDT::DataMonitor)
-
-      buff_length = shcam.listlength
-      signaling_fetching = true
-      thr_id = Threads.threadid()
-      @info "start grabbing loop thread id = $thr_id"
-      while true
-        if isempty(c_buff)
-          thread_safe_wait(c_buff)
-        end
-        # @info "grabbing data"
-        data_pack = take!(c_buff)
-        (img, ts, id) = unpack(data_pack)
-        ind_array = fecth_lastest_index(id, Int64(buff_length))
-        println("id = $id")
-        # lock data monitor
-        wrlock(monitorDT,1.0) do
-          copyto!(remcam.arrays[ind_array], img)
-          remcam.timestamps[ind_array] = ts
-        end
-        # FIXME critical section: bottom neck suspected
-
-        # start fetch
-        if signaling_fetching
-          thread_safe_notify(monitorDT.wait_to_fetch)
-          signaling_fetching = false
-        end
-
-        thread_safe_wait(monitorDT.fetch_index_read)
-
-        wrlock(monitorDT,0.5) do
-            monitorDT.procedures[2](monitorDT,ind_array)
-            thread_safe_notify(monitorDT.fetch_index_updated)
-        end
-
-        @info "updated index to $ind_array .."
-
-    end
 end
-
-
-"""
-    SpinnakerCameras.fetching()
-    fetches data from RemoteCamera arrays to RemoteCamera buffers
-""" fetching
-fetching(remcam::RemoteCamera, monitorRC::RemoteCameraMonitor,
-          monitorDT::DataMonitor) = begin
-          try
-            @spawn _fetching(remcam, monitorRC,monitorDT)
-          catch ex
-            @error ex
-          end
-        end
-
-
-function _fetching(remcam::RemoteCamera, monitorRC::RemoteCameraMonitor, monitorDT::DataMonitor)
-    first_loop = true
-    timeout = 0.5
-    thr_id = Threads.threadid()
-    while true
-        # FIXME critical section: bottom neck suspected
-        # first loop skip waiting
-
-        if first_loop
-          @info "first fetching thread id = $thr_id"
-          fetch_from_array(remcam,monitorRC,monitorDT,timeout)
-          first_loop = false
-        else
-          thread_safe_wait(monitorDT.fetch_index_updated)
-          fetch_from_array(remcam,monitorRC,monitorDT,timeout)
-
-        end
-
-    end
-end
-
-
 
 
 ## attach extension
@@ -638,42 +508,36 @@ end
 
 #--- shared camera operations
 # Operation - Commands table
-next_camera_operation(cmd::RemoteCameraCommand,
-shcam::SharedCamera,monitorSC::SharedCameraMonitor,
-  remcam::RemoteCamera, monitorRC::RemoteCameraMonitor) = next_camera_operation(Val(cmd),shcam,monitorSC ,remcam , monitorRC)
+next_camera_operation(cmd::RemoteCameraCommand,shcam::SharedCamera, remcam::RemoteCamera) = next_camera_operation(Val(cmd),shcam ,remcam)
 
 for (cmd, cam_op) in (
     (:CMD_INIT, :init),
-    (:CMD_WORK, :start)
+    (:CMD_WORK, :start),
+    (:CMD_STOP, :stop),
+    (:CMD_CONFIG, :config),
+    (:CMD_RESET, :reset)
 
     )
 @eval begin
-    function next_camera_operation(::Val{$cmd}, shcam::SharedCamera,
-                        monitorSC::SharedCameraMonitor, remcam::RemoteCamera,monitorRC::RemoteCameraMonitor)
+    function next_camera_operation(::Val{$cmd}, shcam::SharedCamera, remcam::RemoteCamera)
         try
-            cameraTask = @spawn $cam_op(shcam, monitorSC,remcam , monitorRC)
+            cameraTask = $cam_op(shcam,remcam)
             str_op = $cam_op
-            # @info "Executed  $str_op \n"
+            @info "Executed  $str_op \n"
         catch ex
             if !isa(ex, SpinnakerCameras.CallError)
                 rethrow(ex)
             end
             @warn "Error occurs $(ex.func)"
 
-            wrlock(monitorSC) do
-                monitorSC.start_status = SIG_ERROR
-            end
+            println(ex)
 
             return_val =  false
             return return_val
         end
 
-        wrlock(monitorSC) do
-            monitorSC.start_status = SIG_OK
-        end
-
         return_val =  true
-        thread_safe_notify(monitorSC.not_started)
+
         return return_val
     end
 end
@@ -682,21 +546,12 @@ end
 """
     SpinnakerCameras.init()
 """ init
-init(shcam::SharedCamera, monitorSC::SharedCameraMonitor,
-    remcam::RemoteCamera, monitorRC::RemoteCameraMonitor) = begin
+init(shcam::SharedCamera,  remcam::RemoteCamera, ) = begin
     camera = device(shcam,1)
     try
         initialize(camera)
-        wrlock(monitorSC,0.5) do
-            monitorSC.completion = SIG_DONE
-        end
-        thread_safe_wait(monitorRC.state_updating)
-        thread_safe_notify(monitorSC.not_complete)
+
     catch ex
-        wrlock(monitorSC,0.5) do
-            monitorSC.completion = SIG_ERROR
-        end
-        thread_safe_notify(monitorSC.not_complete)
         rethrow(ex)
     end
     nothing
@@ -705,49 +560,19 @@ end
     Tao.start(cam; skip=0, timeout=5.0)
 """
 
-start(shcam::SharedCamera,  monitorSC::SharedCameraMonitor,
-      remcam::RemoteCamera, monitorRC::RemoteCameraMonitor) = begin
+start(shcam::SharedCamera,remcam::RemoteCamera ) = begin
 
     shcam.attachedCam > 0 || throw(ErrorException("No attached cameras"))
 
     camera = device(shcam,1)
-    img_buffer = Channel{DataPack}(1)
-    monitorDT =  DataMonitor(default_p_list_data)
-    create_monitor_shared_object!(SharedObject,monitorDT)
-
-    # start working thread
-    working(camera,img_buffer)
-      # @info "working starts"
 
     try
-        # start grabbing
-        grabbing(img_buffer,shcam, remcam, monitorRC,monitorDT)
-        # @info "grabbing starts"
-      catch ex
-        println(ex)
-        @warn "failed at grabbing"
-      end
-
-      try
-        # start fetching
-        thread_safe_wait(monitorDT.wait_to_fetch)
-        fetching(remcam, monitorRC,monitorDT)
-        # @info "fetching starts"
-
-      catch ex
-        @warn "error with start"
-        wrlock(monitorSC,0.5) do
-            monitorSC.completion = SIG_ERROR
-        end
-        thread_safe_notify(monitorSC.not_complete)
-        throw(ex)
+    # start working
+    working(camera,remcam)
+    catch ex
+      println(ex)
+      rethrow(ex)
     end
-    # @info "wait state update"
-    thread_safe_wait(monitorRC.state_updating)
-    wrlock(monitorSC,0.5) do
-        monitorSC.completion = SIG_DONE
-    end
-    thread_safe_notify(monitorSC.not_complete)
     @info "start is DONE"
     nothing
 end
@@ -760,226 +585,52 @@ end
     running or about to start.
 
 """
-stop(remoteCam::RemoteCamera,  camNum::Integer; timeout::Real=5.0) = begin
-    cam = device(remoteCam)
-    cam.attachedCam > 0 || throw(ErrorException("No attached cameras"))
-    cam.attachedCam >= camNum || throw(ErrorException("Invalid camera number"))
+stop(shcam::SharedCamera,remcam::RemoteCamera, ) = begin
 
-    camera = cam.cameras[camNum]
-    state = rdlock(cam, timeout) do
-        cam.state
-    end
+    shcam.attachedCam > 0 || throw(ErrorException("No attached cameras"))
 
-    if state == STATE_WORK
-        schedule(@task stop(camera))
-    else
-        throw(ErrorException("Camera is not working: $state"))
-    end
+    camera = device(shcam,1)
 
-    nothing
-
-end
-
-"""
-    Tao.abort(cam; timeout=5.0)
-
-    aborts image acquisition by shared or remote camera `cam` not waiting more than
-    the limit set by `timeout` in seconds.  Nothing is done if acquisition is not
-    running or about to start.
-
-"""
-# abort(cam::RemoteCamera; kwds...) = abort(device(cam); kwds...)
-abort(remoteCam::RemoteCamera; timeout::Real=5.0) = begin
-    cam = device(remoteCam)
-    cam.attachedCam > 0 || throw(ErrorException("No attached cameras"))
-    cam.attachedCam >= camNum || throw(ErrorException("Invalid camera number"))
-
-    camera = cam.cameras[camNum]
-
-    state = rdlock(cam, timeout) do
-        cam.state
-    end
-
-    if state == STATE_WORK
-        schedule(@task aborting(camera))
-    end
-    nothing
-end
-
-
-#---
-"""
-    TaoBindings.fetch(cam, sym, timeout=1.0) -> arr
-
-    yields the shared array storing an image acquired by the remote camera `cam`.
-    Argument `sym` may be `:last` to fetch the last acquired frame, or `:next` to
-    fetch the next one.  The call never blocks more than the limit set by `timeout`
-    and is just used for locking the camera (which should never be very long).
-
-    The result is a shared array which should be locked for reading to make sure
-    its contents is preserved and up to date.
-
-    When fetching the next frame, the array counter should be checked to assert the
-    vailidity of the frame:
-
-        arr = fetch(cam, :next)
-        rdlock(arr) do
-            if arr.counter > 0
-                # This is a valid frame.
-                ...
-            else
-                # Acquisition has been stopped.
-                ...
-            end
-        end
-
-"""
-function fetch_from_array(remcam::RemoteCamera, monitorRC:: RemoteCameraMonitor,
-                          monitorDT::DataMonitor, timeout::Float64)
-    # retrieve the index in the array to be fetch
-
-      ind = rdlock(monitorDT,timeout) do
-          monitorDT.fetch_index
-      end
-
-    thread_safe_notify(monitorDT.fetch_index_read)
-    @info "index $ind is read..."
-
-    # put data in the acquisition buffer
     try
-      # lock shared arrays
-      wrlock(remcam.img,timeout) do
-          copyto!(remcam.img, remcam.arrays[ind])
-      end
-      wrlock(remcam.imgTime,timeout) do
-         remcam.imgTime[1] =  remcam.timestamps[ind]
-      end
+      stop(camera)
 
-      # increment release counter
-      wrlock(monitorDT,timeout) do
-          monitorDT.procedures[4](monitorDT)
-      end
     catch ex
-      println(ex)
+        rethrow(ex)
     end
+
+    nothing
 
 end
 
+config(shcam::SharedCamera,remcam::RemoteCamera) = begin
 
+    shcam.attachedCam > 0 || throw(ErrorException("No attached cameras"))
 
+    camera = device(shcam,1)
 
-#===
-"""
-    TaoBindings.fetch(cam, sym, timeout=1.0) -> arr
+    try
+      configure(camera, shcam.img_config)
 
-    yields the shared array storing an image acquired by the remote camera `cam`.
-    Argument `sym` may be `:last` to fetch the last acquired frame, or `:next` to
-    fetch the next one.  The call never blocks more than the limit set by `timeout`
-    and is just used for locking the camera (which should never be very long).
-
-    The result is a shared array which should be locked for reading to make sure
-    its contents is preserved and up to date.
-
-    When fetching the next frame, the array counter should be checked to assert the
-    vailidity of the frame:
-
-        arr = fetch(cam, :next)
-        rdlock(arr) do
-            if arr.counter > 0
-                # This is a valid frame.
-                ...
-            else
-                # Acquisition has been stopped.
-                ...
-            end
-        end
-
-"""
-function fetch(cam::RemoteCamera, sym::Symbol, timeout=1.0)
-    # Get the number of acquired images and the shared memory identifers of the
-    # the last and nex images.
-    dev = device(cam)
-    counter, last, next, lastTS, nextTS = rdlock(dev, timeout) do
-        Int(dev.counter), dev.last, dev.next, dev.lastTS, dev.nextTS
-    end
-    if sym === :next
-        counter += 1
-        shmid = next
-        timestamp = nextTS
-    elseif sym === :last
-        shmid = last
-        timestamp = lastTS
-    else
-        throw(ArgumentError("invalid acquisition buffer identifier"))
-    end
-    if counter < 1 || shmid == BAD_SHMID
-        error("no images have been acquired yet, first start acquisition")
+    catch ex
+        rethrow(ex)
     end
 
-    # To avoid the overheads of systematically attaching/detaching shared
-    # arrays, figure out whether we already have attached the shared array in
-    # our list.
-    arrays = _get_arrays(cam)                # list of shared arrays
-    shmids = _get_shmids(cam)                # list if shared memory identifiers
-    timestamps = _get_timestamps(cam)
-    index = (counter - 1)%length(shmids) + 1
-    if shmids[index] != shmid
-        # FIXME: if shmid != BAD_SHMID
-        # FIXME:     warning("we are loosing frames!")
-        # FIXME: end
-        arrays[index] = attach(SharedArray, shmid)
-        shmids[index] = shmid
-        timestamps[index] = timestamp
-    end
-    return arrays[index], timestamps[index]
+    nothing
 end
 
-"""
-    timedwait(T, cam, timeout) -> [wgt,] img
 
-    waits for a new image to be available from the remote camera `cam` and returns
-    the result specified by `T`, that is either a simple image if `T = SingleImage`
-    or an array of weights and an image if `T = WeightedImage`.
+reset(shcam::SharedCamera,remcam::RemoteCamera) = begin
 
-    The `timeout` argument is to specify a time limit for waiting.  If it is a
-    2-tuple, `timeout[1]` is for waiting for the remote camera and `timeout[2]` is
-    for waiting for the image.  Otherwise the default time limit of
-    `TaoBindings.fetch` is assumed for waiting for the camera and `timeout` is for
-    waiting for the image.
+    shcam.attachedCam > 0 || throw(ErrorException("No attached cameras"))
 
-    For example, to wait for the next image with a timout of 0.1 second on the
-    shared camera and a timeout of 2 seconds on the image, call:
+    camera = device(shcam,1)
 
-        timedwait( cam, (0.1, 2))
+    try
+      reset(camera)
 
-
-    See also: [`TaoBindings.fetch`](@ref), [`TaoBindings.rdlock`](@ref).
-
-"""
-
-function Base.timedwait(cam::RemoteCamera, timeout)
-    # fetch the image data from Remote Camera
-    arr, ts = fetch(cam, :next)
-    # made the data available in the acquisition buffer
-    rdlock(arr, timeout) do
-        _produce(arr, cam)
-        cam.imgTime = ts
+    catch ex
+        rethrow(ex)
     end
 
+    nothing
 end
-
-@inline fastmax(a::T, b::T) where {T<:AbstractFloat} = (b > a ? b : a)
-
-function _produce(buf::SharedArray{<:Any,2},
-                  cam::RemoteCamera{T}) where {T}
-      #copy the shared array to RemoteCamera buffer
-    nx, ny = size(buf)
-    img = cam.cached_imag
-    @inbounds for y in 1:ny
-        @simd for x in 1:nx
-            img[x,y] = T(buf[x,y])
-        end
-    end
-
-end
-===#

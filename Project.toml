@@ -5,6 +5,8 @@ version = "0.1.0"
 
 [deps]
 ArrayTools = "1dc0ca97-c5ce-4e77-ac6d-c576ac9d7f27"
+Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
+Distributed = "8ba89e20-285c-5b6f-9357-94700520ee1b"
 ImageInTerminal = "d8c32880-2388-543b-8c61-d9f865259254"
 Images = "916415d5-f1e6-5110-898d-aaa5f9f070e0"
 Libdl = "8f399da3-3557-5675-b5ff-fb832c97cbdb"

@@ -141,7 +141,9 @@ const   CMD_WAIT  = RemoteCameraCommand(1)
 const   CMD_WORK = RemoteCameraCommand(2)
 const   CMD_STOP  = RemoteCameraCommand(3)
 const   CMD_ABORT  = RemoteCameraCommand(4)
-const   CMD_QUIT  = RemoteCameraCommand(5)
+const   CMD_RESET  = RemoteCameraCommand(5)
+const   CMD_CONFIG  = RemoteCameraCommand(6)
+const   CMD_QUIT  = RemoteCameraCommand(7)
 
 
 struct ShCamSIG
@@ -283,12 +285,12 @@ mutable struct RemoteCamera{T<:Number} <: AbstractCamera{T}
     shmids::Vector{ShmId}            # list of corresponding identifiers
     timestamps::Vector{UInt64}         # list of timestamps of the shared array
     device::SharedCamera             # connection to remote camera
-
     time_origin::HighResolutionTime     # timestamp when the server is up
 
+    cmds::SharedArray{Cint,1}
     img::SharedArray{T,2}                # last image
     imgTime::SharedArray{UInt64,1}       # last image timestamp
-
+    no_cmds::Base.Condition
     function RemoteCamera{T}(device::SharedCamera,dims::NTuple{2,Int64}) where {T<:Number}
         isconcretetype(T) || error("pixel type $T must be concrete")
         len = Int(device.listlength)
@@ -296,12 +298,18 @@ mutable struct RemoteCamera{T<:Number} <: AbstractCamera{T}
         shmids = fill!(Vector{ShmId}(undef, len), -1)
         timestamps = fill!(Vector{UInt64}(undef,len), 0)
 
+        _cmds= create(SharedArray{Cint,1},2)
+        cmds = attach(SharedArray, _cmds.shmid)
 
         imgBuff = create(SharedArray{T,2},dims)
         img = attach(SharedArray, imgBuff.shmid)
 
         imgTimeBuff = create(SharedArray{UInt64,1},1)
         imgTime = attach(SharedArray, imgTimeBuff.shmid)
+
+        wrlock(cmds, 0.5) do
+            fill!(cmds,-1)
+        end
 
         wrlock(img, 0.5) do
             fill!(img,convert(T,0))
@@ -311,7 +319,7 @@ mutable struct RemoteCamera{T<:Number} <: AbstractCamera{T}
             fill!(imgTime,0)
         end
 
-        return new{T}(arrays, shmids, timestamps, device,HighResolutionTime(0,0),img,imgTime)
+        return new{T}(arrays, shmids, timestamps, device,HighResolutionTime(0,0),cmds,img,imgTime,Condition())
     end
 end
 

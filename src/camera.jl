@@ -33,7 +33,6 @@ function set_acquisitionmode(camera::Camera, mode_str::AbstractString)
 
    # get entry node value
    mode_num = getEntryValue(acquisitionModeEntryNode)
-
    # set the acquisitionmode node
    isavailable(acquisitionModeNode)
    iswritable(acquisitionModeNode)
@@ -97,11 +96,26 @@ function reset_exposure(camera::Camera)
 end
 
 """
- SpinnakerCameras.set_gain(camera, gainvalue)
+   SpinnakerCameras.read_exposuretime(camera,exposure_time)
 
-""" set_gain
+""" read_exposuretime
+function read_exposuretime(camera::Camera)
+    _camNodemape = camera.nodemap
+    exposureTimeNode = _camNodemape["ExposureTime"]
+    isavailable(exposureTimeNode)
+    isreadable(exposureTimeNode)
+    val =  getvalue(Cdouble, exposureTimeNode, false)
+    finalize(_camNodemape)
+    return val
+end
 
-function set_gain(camera::Camera, gainvalue::Float64)
+
+"""
+ SpinnakerCameras.set_gainvalue(camera, gainvalue)
+
+""" set_gainvalue
+
+function set_gainvalue(camera::Camera, gainvalue::Float64)
     _camNodemape = camera.nodemap
 
    # turn off automatic exposure time
@@ -156,26 +170,171 @@ end
 
 """
     SpinnakerCameras.set_reverse(cameara,reverse_dir)
-""" set_reverse
-function set_reverse(camera::Camera, reverse_dir::Symbol)
-    input = [:x,:y,:X,:Y]
-    reverse_dir ∈ inpuy || throw(ArgumentError("invalid reverse direction"))
+""" set_reversex
+function set_reversex(camera::Camera, action::Bool)
 
-    if reverse_dir == :x
-        reverse_dir == :X
+    if action
+        _camNodemape = camera.nodemap
+        # get reverse node
+        ReverseNode = _camNodemape["ReverseX"]
+
+        # check availability and readability
+        isavailable(ReverseNode)
+        isreadable(ReverseNode)
+
+        setValue(ReverseNode,true)
     else
-        reverse_dir == :Y
+        nothing
     end
+end
+
+function set_reversey(camera::Camera, action::Bool)
+    if action
+
+        _camNodemape = camera.nodemap
+        # get reverse node
+        ReverseNode = _camNodemape["ReverseY"]
+
+        # check availability and readability
+        isavailable(ReverseNode)
+        isreadable(ReverseNode)
+
+        setValue(ReverseNode,true)
+    else
+        nothing
+    end
+end
+
+# FIXME check bounds
+"""
+    SpinnakerCameras.set_width(cameara,width)
+""" set_width
+function set_width(camera::Camera, width::Int64)
 
     _camNodemape = camera.nodemap
     # get reverse node
-    ReverseNode = _camNodemape["Reverse$(reverse_dir)"]
+    WidthNode = _camNodemape["Width"]
 
     # check availability and readability
-    isavailable(ReverseNode)
-    isreadable(ReverseNode)
+    isavailable(WidthNode)
+    isreadable(WidthNode)
+    widthMax = getmax(Int64, WidthNode)
+    widthMin = getmin(Int64, WidthNode)
+    println(widthMin)
+    if width > widthMax
+         width = widthMax
+        @info "width is bounded to $width"
+    elseif width < widthMin
+        width = widthMin
+       @info "width is bounded to $width"
+   end
 
-    setValue(ReverseNode,true)
+    setValue(WidthNode,width)
+end
+
+"""
+    SpinnakerCameras.set_height(cameara,height)
+""" set_height
+function set_height(camera::Camera, height::Int64)
+
+    _camNodemape = camera.nodemap
+    # get reverse node
+    HeightNode = _camNodemape["Height"]
+
+    # check availability and readability
+    isavailable(HeightNode)
+    isreadable(HeightNode)
+    heightMax = getmax(Int64, HeightNode)
+    heightMin = getmin(Int64, HeightNode)
+
+    if height > heightMax
+         height = heightMax
+        @info "height is bounded to $height"
+    elseif height < heightMin
+        height = heightMin
+       @info "height is bounded to $height"
+    end
+    setValue(HeightNode,height)
+end
+
+"""
+    SpinnakerCameras.set_offsetX(cameara,offsetx)
+""" set_offsetX
+function set_offsetX(camera::Camera, offsetx::Int64)
+
+    _camNodemape = camera.nodemap
+    # get reverse node
+    OffsetXNode = _camNodemape["OffsetX"]
+
+    # check availability and readability
+    isavailable(OffsetXNode)
+    isreadable(OffsetXNode)
+    offsetxMax = getmax(Int64, OffsetXNode)
+    offsetxMin = getmin(Int64, OffsetXNode)
+    println(offsetxMax)
+    if offsetx > offsetxMax
+         offsetx = offsetxMax
+        @info "offsetx is bounded to $width"
+    elseif offsetx < offsetxMin
+        offsetx = offsetxMin
+       @info "offsetx is bounded to $width"
+    end
+    setValue(OffsetXNode,offsetx)
+end
+
+"""
+    SpinnakerCameras.set_offsetY(camera,offsety)
+""" set_offsetY
+function set_offsetY(camera::Camera, offsety::Int64)
+
+    _camNodemape = camera.nodemap
+    # get reverse node
+    OffsetYNode = _camNodemape["OffsetY"]
+
+    # check availability and readability
+    isavailable(OffsetYNode)
+    isreadable(OffsetYNode)
+    offsetyMax = getmax(Int64, OffsetYNode)
+    offsetyMin = getmin(Int64, OffsetYNode)
+    println(offsetyMax)
+    if offsety > offsetyMax
+         offsety = offsetyMax
+        @info "offsetx is bounded to $width"
+    elseif offsety < offsetyMin
+        offsety = offsetyMin
+       @info "offsetx is bounded to $width"
+    end
+    setValue(OffsetYNode,offsety)
+end
+
+"""
+    SpinnakerCameras.set_pixelformat(camera, pixelformat)
+""" set_pixelformat
+# FIXME mode enum number has to be inquired
+function set_pixelformat(camera::Camera,pixelformat::PixelFormat)
+    _camNodemape = camera.nodemap
+   pixelformatNode = _camNodemape["PixelFormat"]
+   # check availability and readability
+   isavailable(pixelformatNode)
+   isreadable(pixelformatNode)
+
+   # get entry node
+   # pixelformatEntryNode = EntryNode(pixelformatNode,_to_str(pixelformat))
+   pixelformatEntryNode = EntryNode(pixelformatNode,"Mono8")
+
+   # get entry node value
+   mode_num = getEntryValue(pixelformatEntryNode)
+   # set the acquisitionmode node
+
+   # check availability and readability
+   isavailable(pixelformatNode)
+   isreadable(pixelformatNode)
+   setEnumValue(pixelformatNode, mode_num)
+
+   finalize(pixelformatEntryNode)
+   finalize(pixelformatNode)
+   finalize(_camNodemape)
+
 end
 
 #---
@@ -280,14 +439,13 @@ end
     Work
     create image buffer, and start image acquisition.
 """ work
-working(camera::Camera, c::Channel{DataPack}) = @async work(camera,c)
-function work(camera::Camera, c::Channel{DataPack})
+working(camera::Camera, remcam::RemoteCamera) = @async work(camera, remcam)
+function work(camera::Camera, remcam::RemoteCamera)
     # set acquisition mode
     set_acquisitionmode(camera, "Continuous")
 
     # begin acquisition
-    thr_id = Threads.threadid()
-    @info "start acquisition loop thread id = $thr_id "
+    @info "start acquisition loop $(myid()) "
 
     start(camera)
     counter = 0
@@ -312,35 +470,27 @@ function work(camera::Camera, c::Channel{DataPack})
        end
         counter +=1
 
-        # slow? FIXME
-        ts = img.timestamp
 
+        ts = img.timestamp
         # nano = convert(Int64,ts%1e9)
         # sec = convert(Int64,(ts%1e10 - nano) ÷ 1e9)
         img_data = @view img.data[:,:]
 
         pack.img = img_data
         pack.ts = ts
-
-        # pack.ts = HighResolutionTime(sec,nano)
         pack.numID = counter
 
-        #blocking until the previous datapack is taken
-        while !isempty(c)
-        end
-        put!(c,pack)
-        @info "image $counter sent .."
+        grabbing(pack,remcam)
 
         @label clear_img
             finalize(img)
 
     end
-
+    nothing
 end
 """
     stopping
 """ stopping
-
 stopping(camera::Camera) = stop(camera)
 
 """
@@ -352,9 +502,15 @@ aborting(camera::Camera) = stop(camera)
 """
     configuring
 """ configuring
-
+configure(camera::Camera, conf::ImageConfigContext) =  configuring(camera,conf)
 function configuring(camera::Camera, conf::ImageConfigContext)
 
+    for param in fieldnames(ImageConfigContext)
+        _param = "$param"
+        val =  getfield(conf,param)
+        @eval func = $(Symbol("set_",param))
+        func(camera,val)
+    end
 
 end
 
