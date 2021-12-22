@@ -20,9 +20,9 @@ get_ts(cam::Camera) = getfield(cam, :ts)
 """ set_acquisitionmode
 function set_acquisitionmode(camera::Camera, mode_str::AbstractString)
 
-    _camNodemape = camera.nodemap
+    cameraNodemap = camera.nodemap
    # get acquisition node
-   acquisitionModeNode = _camNodemape["AcquisitionMode"]
+   acquisitionModeNode = cameraNodemap["AcquisitionMode"]
 
    # check availability and readability
    isavailable(acquisitionModeNode)
@@ -41,9 +41,10 @@ function set_acquisitionmode(camera::Camera, mode_str::AbstractString)
 
    finalize(acquisitionModeEntryNode)
    finalize(acquisitionModeNode)
-   finalize(_camNodemape)
+   finalize(cameraNodemap)
 
 end
+
 
 """
    SpinnakerCameras.configure_exposure(camera,exposure_time)
@@ -220,13 +221,12 @@ function set_width(camera::Camera, width::Int64)
     isreadable(WidthNode)
     widthMax = getmax(Int64, WidthNode)
     widthMin = getmin(Int64, WidthNode)
-    println(widthMin)
     if width > widthMax
          width = widthMax
-        @info "width is bounded to $width"
+        @warn "width is bounded to $width"
     elseif width < widthMin
         width = widthMin
-       @info "width is bounded to $width"
+        @warn "width is bounded to $width"
    end
 
     setValue(WidthNode,width)
@@ -249,10 +249,10 @@ function set_height(camera::Camera, height::Int64)
 
     if height > heightMax
          height = heightMax
-        @info "height is bounded to $height"
+        @warn "height is bounded to $height"
     elseif height < heightMin
         height = heightMin
-       @info "height is bounded to $height"
+       @warn "height is bounded to $height"
     end
     setValue(HeightNode,height)
 end
@@ -271,13 +271,12 @@ function set_offsetX(camera::Camera, offsetx::Int64)
     isreadable(OffsetXNode)
     offsetxMax = getmax(Int64, OffsetXNode)
     offsetxMin = getmin(Int64, OffsetXNode)
-    println(offsetxMax)
     if offsetx > offsetxMax
          offsetx = offsetxMax
-        @info "offsetx is bounded to $width"
+        @warn "offsetx is bounded to $width"
     elseif offsetx < offsetxMin
         offsetx = offsetxMin
-       @info "offsetx is bounded to $width"
+       @warn "offsetx is bounded to $width"
     end
     setValue(OffsetXNode,offsetx)
 end
@@ -296,13 +295,12 @@ function set_offsetY(camera::Camera, offsety::Int64)
     isreadable(OffsetYNode)
     offsetyMax = getmax(Int64, OffsetYNode)
     offsetyMin = getmin(Int64, OffsetYNode)
-    println(offsetyMax)
     if offsety > offsetyMax
          offsety = offsetyMax
-        @info "offsetx is bounded to $width"
+        @warn "offsetx is bounded to $width"
     elseif offsety < offsetyMin
         offsety = offsetyMin
-       @info "offsetx is bounded to $width"
+       @warn "offsetx is bounded to $width"
     end
     setValue(OffsetYNode,offsety)
 end
@@ -310,8 +308,7 @@ end
 """
     SpinnakerCameras.set_pixelformat(camera, pixelformat)
 """ set_pixelformat
-# FIXME mode enum number has to be inquired
-function set_pixelformat(camera::Camera,pixelformat::PixelFormat)
+function set_pixelformat(camera::Camera,pixelformat::String)
     _camNodemape = camera.nodemap
    pixelformatNode = _camNodemape["PixelFormat"]
    # check availability and readability
@@ -319,8 +316,7 @@ function set_pixelformat(camera::Camera,pixelformat::PixelFormat)
    isreadable(pixelformatNode)
 
    # get entry node
-   # pixelformatEntryNode = EntryNode(pixelformatNode,_to_str(pixelformat))
-   pixelformatEntryNode = EntryNode(pixelformatNode,"Mono8")
+   pixelformatEntryNode = EntryNode(pixelformatNode,pixelformat)
 
    # get entry node value
    mode_num = getEntryValue(pixelformatEntryNode)
@@ -439,59 +435,100 @@ end
     Work
     create image buffer, and start image acquisition.
 """ work
-working(camera::Camera, remcam::RemoteCamera) = @async work(camera, remcam)
-function work(camera::Camera, remcam::RemoteCamera)
-    # set acquisition mode
-    set_acquisitionmode(camera, "Continuous")
+function working(camNum::Int64)
+      w = workers()
+      try
+         remote_do(SpinnakerCameras.work,w[1],camNum)
 
-    # begin acquisition
-    @info "start acquisition loop $(myid()) "
-
-    start(camera)
-    counter = 0
-    pack = DataPack()
-    while true
-        #get image
-        img =
-        try
-            SpinnakerCameras.next_image(camera, 1)
-        catch ex
-            @warn "image corrupted"
-            if (!isa(ex, SpinnakerCameras.CallError) ||
-                ex.code != SpinnakerCameras.SPINNAKER_ERR_TIMEOUT)
-                rethrow(ex)
-            end
-            nothing
-        end
-        # @info "got image"
-        #put data
-        if img.incomplete == 1 && img.status != 0
-           @goto clear_img
-       end
-        counter +=1
+      catch e
+        @info e
+      end
+     return w[1]
+ end
 
 
-        ts = img.timestamp
-        # nano = convert(Int64,ts%1e9)
-        # sec = convert(Int64,(ts%1e10 - nano) ÷ 1e9)
-        img_data = @view img.data[:,:]
+function work(camNum::Int64)
+    Base.exit_on_sigint(false)
 
-        pack.img = img_data
-        pack.ts = ts
-        pack.numID = counter
+    system = SpinnakerCameras.System()
+    camList = SpinnakerCameras.CameraList(system)
+    camNum = length(camList)
 
-        grabbing(pack,remcam)
-
-        @label clear_img
-            finalize(img)
+    if camNum == 0
+        finalize(camList)
+        finalize(system)
+        throw("No cameras found... ")
 
     end
-    nothing
+    camera = camList[camNum]
+
+    SpinnakerCameras.initialize(camera)
+    # set acquisition mode
+    SpinnakerCameras.set_acquisitionmode(camera, "Continuous")
+
+    # attach shared array in a remote process
+    img_array, imgTime_array = SpinnakerCameras.attach_remote_process()
+    # begin acquisition
+    SpinnakerCameras.start(camera)
+    counter = 0
+    # pack = SpinnakerCameras.DataPack()
+    try
+        while true
+            #get image
+            img =
+            try
+                SpinnakerCameras.next_image(camera,0.5)
+            catch ex
+
+                if (!isa(ex, SpinnakerCameras.CallError) ||
+                    ex.code != SpinnakerCameras.SPINNAKER_ERR_TIMEOUT)
+                    rethrow(ex)
+                else
+                    @warn "image corrupted"
+                end
+                nothing
+            end
+
+            if img.incomplete == 1 && img.status != 0
+               @goto clear_img
+            end
+
+            counter +=1
+
+            ts = img.timestamp
+            img_data = @view img.data[:,:]
+
+            # write to remtoe camera shared array
+            wrlock(img_array,1.0) do
+                copyto!(img_array, img_data)
+            end
+
+            wrlock(imgTime_array,1.0) do
+                imgTime_array[1] = ts
+            end
+            # write(f,"$counter\n")
+            @label clear_img
+                SpinnakerCameras.finalize(img)
+
+        end
+    catch e
+        SpinnakerCameras.stop(camera)
+        if e isa InterruptException
+            @info "Acquisition loop is terminated"
+            try
+                SpinnakerCameras.finalize(img)
+            catch e
+                if !(e isa UndefVarError)
+                    rethrow(e)
+                end
+            end
+            return nothing
+        else
+            rethrow(e)
+            return nothing
+        end
+    end
 end
-"""
-    stopping
-""" stopping
-stopping(camera::Camera) = stop(camera)
 
 """
     aborting
@@ -499,29 +536,10 @@ stopping(camera::Camera) = stop(camera)
 aborting(camera::Camera) = stop(camera)
 
 
-"""
-    configuring
-""" configuring
-configure(camera::Camera, conf::ImageConfigContext) =  configuring(camera,conf)
-function configuring(camera::Camera, conf::ImageConfigContext)
-
-    for param in fieldnames(ImageConfigContext)
-        _param = "$param"
-        val =  getfield(conf,param)
-        @eval func = $(Symbol("set_",param))
-        func(camera,val)
-    end
-
-end
-
 
 #--- Camera utils
-"""
-SpinnakerCameras.reset(camera)
-    Power cycle the device. The device needs to be rediscovered
 
-""" reset
-function reset(camera::Camera)
+function _reset(camera::Camera)
     _camNodemape = camera.nodemap
     deviceResetNode = _camNodemape["DeviceReset"]
     command_execute(deviceResetNode)
@@ -561,5 +579,6 @@ function _finalize(obj::Camera)
 
         _clear_handle!(obj)
     end
+
     return nothing
 end

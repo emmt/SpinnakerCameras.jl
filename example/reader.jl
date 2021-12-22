@@ -1,5 +1,6 @@
 using SpinnakerCameras
 using Images
+using Statistics
 using Dates
 if pwd() != "/home/evwaco/SpinnakerCameras.jl/example"
     cd("/home/evwaco/SpinnakerCameras.jl/example")
@@ -39,13 +40,13 @@ local_ts = Vector{DateTime}(undef,saveNum)
     # print("Image $(k) is saved ...")
 end
 
-numericArr = map(saveImg[:,:,k] for k =1:saveNum) do _img
-    convert(Array{Float16},_img)
-end
-
-coloredImage = map(numericArr[k] for k in 1:saveNum)do arr
-    colorview(Gray,arr)
-end
+# numericArr = map(saveImg[:,:,k] for k =1:saveNum) do _img
+#     convert(Array{Float16},_img)
+# end
+#
+# coloredImage = map(numericArr[k] for k in 1:saveNum)do arr
+#     colorview(Gray,arr)
+# end
 timestamp = Vector{DateTime}(undef,15)
 change_ind = Vector{Int64}(undef,20)
 counter = [1]
@@ -60,3 +61,12 @@ for i in 2:length(saveTs)
         counter[1] += 1
     end
 end
+
+timeDiff = []
+for i in 2:counter[1]-1
+    diffT = saveTs[change_ind[i]] -saveTs[change_ind[i-1]]
+    # println(diffT)
+    append!(timeDiff,[Int64(diffT)]/1e6)
+end
+
+println("Average image acquisition rate = $(mean(timeDiff)) ms")

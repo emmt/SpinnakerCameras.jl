@@ -5,14 +5,15 @@
 #
 #------------------------------------------------------------------------------
 
+# __precompile__(false)
 module SpinnakerCameras
-
 using Printf
-using Images
+# using Images
 using Dates
 using Base: @propagate_inbounds
 using Base.Threads
 using Distributed
+using Printf
 import Base:
     VersionNumber,
     axes,
@@ -39,6 +40,7 @@ import Base:
     ndims,
     propertynames,
     parent,
+    parse,
     reset,
     reshape,
     size,
@@ -52,8 +54,6 @@ import Base:
     trylock,
     unlock,
     wait
-
-using Printf
 
 
 # TAO bindings
@@ -69,24 +69,38 @@ begin deps = normpath(joinpath(@__DIR__, "../deps/deps.jl"))
         "File \"$deps\" does not exits, see \"README.md\" for installation.")
     include(deps)
 end
+
+# prepare files
+function __init__()
+    img_fname = "img_config.txt"
+    path = "/tmp/SpinnakerCameras/"
+    shmid_fname = "shmids.txt"
+    try
+        mkdir(path)
+        touch(joinpath(path,img_fname))
+        touch(joinpath(path,shmid_fname))
+    catch InitError
+        @warn "files already exist"
+    finally
+        @info "image configuration and shmids files are created in $path"
+    end
+    nothing
+end
+
 # Spinnaker interface
 include("macros.jl")
 include("types.jl")
 include("errors.jl")
 include("methods.jl")
 include("images.jl")
-
 include("typesSharedObjects.jl")
 include("times.jl")
 include("sharedobjects.jl")
 include("sharedarrays.jl")
 include("sharedcameras.jl")
 include("taoerrors.jl")
-
 include("camera.jl")
 include("acquisitions.jl")
-
-
 
 
 end # module

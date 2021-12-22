@@ -581,7 +581,6 @@ end
 function _finalize(obj::NodeMap)
     ptr = handle(obj)
     if !isnull(ptr)
-        print("Finalize Nodemap ...\n")
         _clear_handle!(obj)
 
     end

@@ -1,8 +1,15 @@
 using Revise
+using Distributed
+addprocs(1)
 
-using SpinnakerCameras
-system = SpinnakerCameras.System()
-camList = SpinnakerCameras.CameraList(system)
+@everywhere using Pkg
+@everywhere Pkg.activate("/home/evwaco/SC.jl/")
+@everywhere import  SpinnakerCameras as SC
+
+
+system = SC.System()
+camList = SC.CameraList(system)
+
 camNum = length(camList)
 
 if camNum == 0
@@ -15,46 +22,50 @@ print("$(camNum) cameras are found \n" )
 
 camera = camList[1]
 
-dev = SpinnakerCameras.create(SpinnakerCameras.SharedCamera)
-shcam = SpinnakerCameras.attach(SpinnakerCameras.SharedCamera, dev.shmid)
+dev = SC.create(SC.SharedCamera)
+shcam = SC.attach(SC.SharedCamera, dev.shmid)
 
-SpinnakerCameras.register(shcam,camera)
+SC.register(shcam,camera)
 dims = (800,800)
-remcam = SpinnakerCameras.RemoteCamera{UInt8}(shcam, dims)
-
+remcam = SC.RemoteCamera{UInt8}(shcam, dims)
 
 #--- listening
 # 1. broadcasting shmid of cmds, state, img, imgBuftime, remote camera monitor
-img_shmid = SpinnakerCameras.get_shmid(remcam.img)
-imgTime_shmid = SpinnakerCameras.get_shmid(remcam.imgTime)
-cmds_shmid = SpinnakerCameras.get_shmid(remcam.cmds)
+img_shmid = SC.get_shmid(remcam.img)
+imgTime_shmid = SC.get_shmid(remcam.imgTime)
+cmds_shmid = SC.get_shmid(remcam.cmds)
 shmids = [img_shmid,imgTime_shmid,cmds_shmid]
-SpinnakerCameras.broadcast_shmids(shmids)
+SC.broadcast_shmids(shmids)
 
-# 2. initialize
-RemoteCameraEngine = SpinnakerCameras.listening(shcam, remcam)
-remcam.cmds[1] = SpinnakerCameras._to_Cint(SpinnakerCameras.CMD_INIT)
+## 2. initialize
+RemoteCameraEngine = SC.listening(shcam, remcam)
+remcam.cmds[1] = SC._to_Cint(SC.CMD_INIT)
 notify(remcam.no_cmds)
 
-# 3. configure camera
+## 3. configure camera
 # update ImageConfigContext in shared camera
-new_conf = SpinnakerCameras.ImageConfigContext()
+new_conf = SC.ImageConfigContext()
 #  nanosecond exposure time
-new_conf.exposuretime = 3000.0
+new_conf.exposuretime = 5000.0
 # ROI
 new_conf.width = 800
 new_conf.height = 800
 new_conf.offsetX = (2048-new_conf.width )/2
 new_conf.offsetY = (1536-new_conf.height)/2
 
-SpinnakerCameras.set_img_config(shcam,new_conf)
-remcam.cmds[1] = SpinnakerCameras._to_Cint(SpinnakerCameras.CMD_CONFIG)
+## configure
+SC.set_img_config(shcam,new_conf)
+remcam.cmds[1] = SC._to_Cint(SC.CMD_CONFIG)
 notify(remcam.no_cmds)
 
-# 4. start acquisition
-remcam.cmds[1] = SpinnakerCameras._to_Cint(SpinnakerCameras.CMD_WORK)
+## 4. start acquisition
+remcam.cmds[1] = SC._to_Cint(SC.CMD_WORK)
 notify(remcam.no_cmds)
 
 # 5. stop acquisition
-# remcam.cmds[1] = SpinnakerCameras._to_Cint(SpinnakerCameras.CMD_STOP)
-# notify(remcam.no_cmds)
+remcam.cmds[1] = SC._to_Cint(SC.CMD_STOP)
+notify(remcam.no_cmds)
+
+#6. update and restart acquisition
+remcam.cmds[1] = SC._to_Cint(SC.CMD_UPDATE)
+notify(remcam.no_cmds)

@@ -18,11 +18,10 @@ propertynames(cam::SharedCamera) =
      :owner,
      :shmid,
      :size,
-
      :lock,
      :attachedCam,
      :cameras,
-     :img_config,      #shared TODO file
+     :img_config,
      :listlength,
      :last,
      :next,
@@ -127,6 +126,7 @@ set_img_config(shcam::SharedCamera, conf::ImageConfigContext) = setfield!(shcam,
 propertynames(cam::RemoteCamera) =
     (
       # RemoteCamera properties
+      :arrays,
       :timestamps,
       :img,
       :imgTime,
@@ -145,48 +145,11 @@ propertynames(cam::RemoteCamera) =
       :next,
       :lastTS,
       :nextTS
-#==
-     # device control
-      # :modelname,
-      :serialnumber,
-      # :firmware_version,
-      # :manufacturerinfo,
-      :userid,
-      :TLtype,
-      :timestamp
-      :temperature,
 
-      # Analog Control
-      :gain,
-      # :gainauto
-
-      # image format control
-      # :sensorencoding,
-      :sensorheight,
-      :sensorwidth,
-      :pixelhieght,
-      :pixelwidth,
-      :shuttermode,
-      :reversex,
-      :reversey,
-      :size,
-      :height,
-      :pixelformat,
-      :width,
-      # :xbin,
-      # :ybin
-      :xoff,
-      :yoff,
-      :compressionmode,
-
-      # Acquisition Control
-      :framerate,
-      :exposuretime,
-      ==#
      )
 
 #top level dispatch
-getproperty(remoteCam::RemoteCamera,sym::Symbol) = getproperty(remoteCam, Val(sym))
+getproperty(remcam::RemoteCamera,sym::Symbol) = getproperty(remcam, Val(sym))
 
 #RemoteCamera properties (read-only)
 for sym in (:timestamps,
@@ -197,7 +160,8 @@ for sym in (:timestamps,
             :arrays,
             :device,
             :no_cmds,
-            :time_origin)
+            :time_origin,
+            :worker_pid)
     _sym = "$sym"
     @eval getproperty(remoteCam::RemoteCamera,::$(Val{sym})) =
                         getfield(remoteCam,Symbol($_sym))
@@ -367,14 +331,34 @@ end
 function broadcast_shmids(shmids::Vector{ShmId})
     fname = "shmids.txt"
     path = "/tmp/SpinnakerCameras/"
+
+    fname ∈ readdir(path) || touch(joinpath(path,fname))
+
     open(path*fname,"w") do f
         for shmid in shmids
             write(f,@sprintf("%d\n",shmid))
         end
     end
 end
-
-
+const img_param = fieldnames(ImageConfigContext)
+const img_param_type = fieldtypes(ImageConfigContext)
+# parse(::Type{PixelFormat}, val::Int64) = PixelFormat(val)
+parse(::Type{String}, pixelformat_str::String) = pixelformat_str
+function _read_and_update_config(shcam::SharedCamera)
+    fname = "img_config.txt"
+    path = "/tmp/SpinnakerCameras/"
+    fname ∈ readdir(path) || throw(LoadError("image config doest not exist"))
+    f = open(path*fname,"r")
+    rd = readlines(f)
+    new_conf = shcam.img_config
+    for i in 1:length(rd)
+      if !isempty(rd[i])
+        setfield!(new_conf,img_param[i],parse(img_param_type[i],rd[i]))
+      end
+    end
+    @show new_conf
+    set_img_config(shcam,new_conf)
+  end
 
 
 #--- Command and state mapper
@@ -423,7 +407,6 @@ thread_safe_notify(r::Condition) = begin
                                 end
                               end
 ## Listening function
-
 @inline no_new_cmds(cmds::SharedArray{Cint,1}) = begin
                         sum(cmds .== -1) == length(cmds)
                       end
@@ -472,13 +455,14 @@ grabbing(datapack::DataPack,remcam::RemoteCamera) = _grabbing(datapack,remcam)
 
 function _grabbing(datapack::DataPack,remcam::RemoteCamera)
       (img, ts, id) = unpack(datapack)
-      id % 50 == 0 && print(id,"..")
+
       wrlock(remcam.img,1) do
         copyto!(remcam.img, img)
       end
       wrlock(remcam.imgTime,1) do
         remcam.imgTime[1] = ts
       end
+      nothing
 
 end
 
@@ -506,7 +490,29 @@ function attach_monitor_mutex!(monitor::AbstractMonitor, shmid::Integer)
     return monitor
 end
 
+# attached image and image timestamp shared array on a worker process
+function attach_remote_process()
+    # read shared array shmids
+    fname = "/tmp/SpinnakerCameras/shmids.txt"
+    f = open(fname,"r")
+    rd = readlines(f)
+    shmids = []
+    for line in rd
+      push!(shmids,parse(Int64,line))
+    end
+
+    img_array = attach(SharedArray{UInt8},shmids[1])
+    imgTime_array = attach(SharedArray{UInt64},shmids[2])
+
+    return img_array, imgTime_array
+end
 #--- shared camera operations
+update_worker_pid(pid::Integer,remcam::RemoteCamera) = begin
+  wrlock(remcam.device,0.1) do
+    setfield!(remcam,:worker_pid,pid)
+  end
+end
+
 # Operation - Commands table
 next_camera_operation(cmd::RemoteCameraCommand,shcam::SharedCamera, remcam::RemoteCamera) = next_camera_operation(Val(cmd),shcam ,remcam)
 
@@ -515,6 +521,7 @@ for (cmd, cam_op) in (
     (:CMD_WORK, :start),
     (:CMD_STOP, :stop),
     (:CMD_CONFIG, :config),
+    (:CMD_UPDATE,  :update),
     (:CMD_RESET, :reset)
 
     )
@@ -545,6 +552,7 @@ end
 
 """
     SpinnakerCameras.init()
+    Initialize camera
 """ init
 init(shcam::SharedCamera,  remcam::RemoteCamera, ) = begin
     camera = device(shcam,1)
@@ -554,62 +562,95 @@ init(shcam::SharedCamera,  remcam::RemoteCamera, ) = begin
     catch ex
         rethrow(ex)
     end
-    nothing
+   nothing
 end
 """
-    Tao.start(cam; skip=0, timeout=5.0)
-"""
+    SpinnakerCameras.start(cam; skip=0, timeout=5.0)
+    Start camera acquisition loop on a worker process.
+    Sending data to shared arrays
+""" start
 
 start(shcam::SharedCamera,remcam::RemoteCamera ) = begin
 
     shcam.attachedCam > 0 || throw(ErrorException("No attached cameras"))
 
     camera = device(shcam,1)
-
+    pid =[0]
     try
     # start working
-    working(camera,remcam)
+    pid[1] = working(camera,remcam)
+    @info "worker pid = $(pid[1])"
+
     catch ex
       println(ex)
       rethrow(ex)
     end
+
+    # broadcast worker pid
+    update_worker_pid(pid[1],remcam)
     @info "start is DONE"
+
     nothing
 end
 
 """
-    Tao.stop(cam; timeout=5.0)
+  SpinnakerCameras.update(SharedCamera, RemoteCamera)
+  This function interrupts the ongoing acquisition loop to update the camera
+  configuration and start a new acquisition loop
+  The new camera configuration setting is read through a file.
+""" update
+function update(shcam::SharedCamera,remcam::RemoteCamera)
+  stop(shcam,remcam)
+  _read_and_update_config(shcam)
+  configure(device(shcam,1),shcam.img_config)
+  @info "Camera configuration has been updated"
+  working(device(shcam,1), remcam)
+  nothing
+end
+
+
+"""
+    SpinnakerCameras.stop(cam; timeout=5.0)
 
     stops image acquisition by shared or remote camera `cam` not waiting more than
     the limit set by `timeout` in seconds.  Nothing is done if acquisition is not
     running or about to start.
-
+stop
 """
-stop(shcam::SharedCamera,remcam::RemoteCamera, ) = begin
+stop(shcam::SharedCamera,remcam::RemoteCamera) = begin
 
     shcam.attachedCam > 0 || throw(ErrorException("No attached cameras"))
 
     camera = device(shcam,1)
-
+    pid = remcam.worker_pid
     try
-      stop(camera)
+      interrupt(pid)
 
     catch ex
-        rethrow(ex)
+      rethrow(ex)
     end
 
     nothing
 
 end
+
+"""
+  SpinnakerCameras.config(SharedCamera, RemtoeCamera)
+  Change camera setting according to the ImageConfigContext in SharedCamera
+""" config
 
 config(shcam::SharedCamera,remcam::RemoteCamera) = begin
 
     shcam.attachedCam > 0 || throw(ErrorException("No attached cameras"))
 
     camera = device(shcam,1)
-
     try
-      configure(camera, shcam.img_config)
+      for param in fieldnames(ImageConfigContext)
+            _param = "$param"
+            val =  getfield(shcam.img_config,param)
+            @eval func = $(Symbol("set_",param))
+            func(camera,val)
+      end
 
     catch ex
         rethrow(ex)
@@ -618,6 +659,11 @@ config(shcam::SharedCamera,remcam::RemoteCamera) = begin
     nothing
 end
 
+"""
+SpinnakerCameras.reset(camera)
+    Power cycle the device
+
+""" _reset
 
 reset(shcam::SharedCamera,remcam::RemoteCamera) = begin
 
@@ -626,10 +672,10 @@ reset(shcam::SharedCamera,remcam::RemoteCamera) = begin
     camera = device(shcam,1)
 
     try
-      reset(camera)
+      _reset(camera)
 
     catch ex
-        rethrow(ex)
+      rethrow(ex)
     end
 
     nothing

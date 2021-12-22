@@ -52,7 +52,7 @@ Author: Bossax <bossa.suan130@gmail.com>
 Date:   Fri Oct 1 12:39:47 2021 +0700
 
     Revert "add acquisition example"
-    
+
     This reverts commit f2018c2e9173c06ed1abd5fedcb47ec23324c63c.
 
 [33mcommit f2018c2e9173c06ed1abd5fedcb47ec23324c63c[m

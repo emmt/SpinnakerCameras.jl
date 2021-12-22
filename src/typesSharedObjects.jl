@@ -143,7 +143,8 @@ const   CMD_STOP  = RemoteCameraCommand(3)
 const   CMD_ABORT  = RemoteCameraCommand(4)
 const   CMD_RESET  = RemoteCameraCommand(5)
 const   CMD_CONFIG  = RemoteCameraCommand(6)
-const   CMD_QUIT  = RemoteCameraCommand(7)
+const   CMD_UPDATE = RemoteCameraCommand(7)
+const   CMD_QUIT  = RemoteCameraCommand(8)
 
 
 struct ShCamSIG
@@ -248,49 +249,36 @@ it is obtained from the associated shared camera.  In any cases, it will be
 asserted that `T` matches the element type of the shared arrays storing the
 acquired images (and their weights).
 
-The remote camera `cam` always provides images of element type `T` using the
-connected remote camera to get/wait images.  It takes care of avoiding
-attaching shared images by maintaining a mirror of the list of shared images
-stored by the virtual frame-grabber owning the remote camera.  This saves the
-time of attaching shared arrays.  This also avoid critical issues in a
-continuous processing loop because Julia garbage collector may not finalize
-(hence detach) attached arrays fast enough and their number of attachments will
-therefore grow indefinitely until resources are exhausted.
-
-The remote camera `cam` may be used as an iterator which provides images until
-the acquisition is stopped (by someone else).
-
-Compared to shared cameras (of type [`TaoBindings.SharedCamera`](@ref)),
-remotes cameras (of type `RemoteCamera`) are needed to:
-
-- provide type-stability (i.e., pixel type is known);
-- preprocess images (if not yet done by the server);
-- hide the list of attached shared arrays;
-- avoid re-allocating resources as much as possible.
-
 A remote camera instance implements the `cam.key` syntax with the same public
-properties as a shared camera plus `cam.cached_image`
-which are arrays used to store the image
+properties as a shared camera plus
 
 
 | Name              | Const. | Description                                                |
 |:------------------|:-------|:-----------------------------------------------------------|
-| `cached_image`    | no     | Image ready to be grabed                         |
-
+|`shmids`           | no     | list of shmids of shared array                             |
+|`img`              | no     | attached shared array of image data                        |
+|`imgTime`          | no     | attached shared array of image timestamp                   |
+|`cmds`             | no     | attached shared array of command                           |
+|
 """
 
 
 mutable struct RemoteCamera{T<:Number} <: AbstractCamera{T}
+    #data buffers imitating grabber
     arrays::Vector{Array{T,2}} # list of attached shared arrays
-    shmids::Vector{ShmId}            # list of corresponding identifiers
     timestamps::Vector{UInt64}         # list of timestamps of the shared array
+
+    shmids::Vector{ShmId}            # list of corresponding identifiers
     device::SharedCamera             # connection to remote camera
     time_origin::HighResolutionTime     # timestamp when the server is up
 
     cmds::SharedArray{Cint,1}
     img::SharedArray{T,2}                # last image
     imgTime::SharedArray{UInt64,1}       # last image timestamp
-    no_cmds::Base.Condition
+    no_cmds::Base.Condition                # cinditional variable for commanding
+
+    worker_pid::Integer                 # worker pid for acquisition interrupting
+
     function RemoteCamera{T}(device::SharedCamera,dims::NTuple{2,Int64}) where {T<:Number}
         isconcretetype(T) || error("pixel type $T must be concrete")
         len = Int(device.listlength)
@@ -319,7 +307,7 @@ mutable struct RemoteCamera{T<:Number} <: AbstractCamera{T}
             fill!(imgTime,0)
         end
 
-        return new{T}(arrays, shmids, timestamps, device,HighResolutionTime(0,0),cmds,img,imgTime,Condition())
+        return new{T}(arrays, shmids, timestamps, device,HighResolutionTime(0,0),cmds,img,imgTime,Condition(),0)
     end
 end
 

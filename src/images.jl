@@ -36,6 +36,14 @@ function next_image(camera::Camera)
     return Image(ref[], false)
 end
 
+function next_image(cameraHandle::CameraHandle)
+    ref = Ref{ImageHandle}(0)
+    @checked_call(:spinCameraGetNextImage,
+                  (CameraHandle, Ptr{ImageHandle}),
+                  cameraHandle, ref)
+    return Image(ref[], false)
+end
+
 function next_image(camera::Camera, seconds::Real)
     ref = Ref{ImageHandle}(0)
     milliseconds = round(Int64, seconds*1_000)
