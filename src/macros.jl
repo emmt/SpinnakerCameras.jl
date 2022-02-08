@@ -14,23 +14,21 @@ calls function `func` in the Spinnaker C SDK with arguments `args...` of types
 as a string or as a symbol.  Example:
 
     @unchecked_call(:spinSystemGetLibraryVersion,
-                    (SystemHandle, Ptr{LibraryVersion},),
-                    system, ref)
+                    (SystemHandle, Ptr{LibraryVersion},), system, ref)
 
-is equivalent to (`lib` is the constant string the path to the Spinnaker
-dynamic library and `Err` is the type of the result returned by all functions
-of the Spinnaker C SDK):
+is equivalent to:
 
     err = ccall((:spinSystemGetLibraryVersion, lib), Err,
-                (SystemHandle, Ptr{LibraryVersion},),
-                system, ref)
+                (SystemHandle, Ptr{LibraryVersion},), system, ref)
 
-or
+or to:
 
    err = @ccall lib.spinSystemGetLibraryVersion(
-       system::SystemHandle,
-       ref::Ptr{LibraryVersion}
-   )::Err
+       system::SystemHandle, ref::Ptr{LibraryVersion})::Err
+
+where `lib` is the constant storing the path of the Spinnaker dynamic library
+and `Err` is the type of the result returned by all functions of the Spinnaker
+C SDK.
 
 """
 macro unchecked_call(func, args...)
@@ -49,15 +47,17 @@ symbol.  Example:
                   (SystemHandle, Ptr{LibraryVersion},),
                   system, ref)
 
-is equivalent to (`lib` is the constant string the path to the Spinnaker
-dynamic library and `Err` is the type of the result returned by all functions
-of the Spinnaker C SDK):
+is equivalent to:
 
     let err = ccall((:spinSystemGetLibraryVersion, lib), Err,
                     (SystemHandle, Ptr{LibraryVersion},),
                     system, ref)
         _check(err, :spinSystemGetLibraryVersion)
     end
+
+where `lib` is the constant storing the path of the Spinnaker dynamic library
+and `Err` is the type of the result returned by all functions of the Spinnaker
+C SDK.
 
 """
 macro checked_call(func, args...)
