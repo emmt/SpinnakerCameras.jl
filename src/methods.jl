@@ -331,7 +331,8 @@ function CameraList(interface::Interface, updatecameras::Bool)
     return cameralist
 end
 
-getindex(lst::CameraList, idx::Union{Integer,AbstractString}) = Camera(lst, idx)
+getindex(lst::CameraList, idx::Union{Integer,AbstractString}) =
+    Camera(lst, idx)
 
 empty!(obj::CameraList) = begin
     @checked_call(:spinCameraListClear, (CameraListHandle,), obj)
@@ -535,28 +536,28 @@ end
 """
     SpinnakerCameras.isavailable(nd)
 
-yields whether node `nd` is available.
+yields whether node is available.
 
 """ isavailable
 
 """
     SpinnakerCameras.isimplemented(nd)
 
-yields whether node `nd` is implemented.
+yields whether node is implemented.
 
 """ isimplemented
 
 """
     SpinnakerCameras.isreadable(nd)
 
-yields whether node `nd` is readable.
+yields whether node is readable.
 
 """ isreadable
 
 """
     SpinnakerCameras.iswritable(nd)
 
-yields whether node `nd` is writable.
+yields whether node is writable.
 
 """ iswritable
 
@@ -571,7 +572,7 @@ for (jl_func, c_func) in ((:isavailable,   :spinNodeIsAvailable),
             isnull(ptr) && return false
             ref = Ref{SpinBool}(false)
             @checked_call($c_func, (NodeHandle, Ptr{SpinBool}),
-                          node, ref)
+                          ptr, ref)
             return to_bool(ref[])
         end
     end
