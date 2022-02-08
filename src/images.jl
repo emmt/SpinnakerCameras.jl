@@ -9,32 +9,32 @@ const PixelFormat_Mono8 = Cenum(0)
 const PixelFormat_Mono16 = Cenum(1)
 
 """
-   SpinnakerCameras.next_image(cam[, secs=Inf]) -> img
+   SpinnakerCameras.next_image(cam, secs=Inf) -> img
 
-yiedls the next image from camera `cam` waiting no longer than `secs` seconds.
+yields the next image from camera `cam` waiting no longer than `secs` seconds.
 
 See [`SpinnakerCameras.Image`](@ref) for properties of images.
 
 """
-function next_image(camera::Camera)
+function next_image(camera::Camera, secs::Real = Inf)
+    secs ≥ 0 || throw(ArgumentError("invalid number of seconds"))
+    msecs = round(secs*1e3)
     ref = Ref{ImageHandle}(0)
-    @checked_call(:spinCameraGetNextImage,
-                  (CameraHandle, Ptr{ImageHandle}),
-                  camera, ref)
-    return Image(ref[], false)
-end
-
-function next_image(camera::Camera, seconds::Real)
-    ref = Ref{ImageHandle}(0)
-    milliseconds = round(Int64, seconds*1_000)
-    @checked_call(:spinCameraGetNextImageEx,
-                  (CameraHandle, Int64, Ptr{ImageHandle}),
-                  camera, milliseconds, ref)
+    if msecs > typemax(UInt64)
+        @checked_call(:spinCameraGetNextImage,
+                      (CameraHandle, Ptr{ImageHandle}),
+                      camera, ref)
+    else
+        @checked_call(:spinCameraGetNextImageEx,
+                      (CameraHandle, UInt64, Ptr{ImageHandle}),
+                      camera, UInt64(msecs), ref)
+    end
     return Image(ref[], false)
 end
 
 """
-    img = SpinnakerCameras.Image(pixelformat, (width, height); offsetx=0, offsety=0)
+    img = SpinnakerCameras.Image(pixelformat, (width, height);
+                                 offsetx=0, offsety=0)
 
 builds a new Spinnaker image instance.  The pixel format is an integer, for
 example one of:
